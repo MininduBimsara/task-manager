@@ -1,41 +1,110 @@
-// Authentication controller
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import User from "../models/user.model";
+// Authentication controller - Uses Service Repository pattern
+import type { Request, Response } from "express";
+import { AuthService } from "../services/auth.service.js";
 
-// Register a new user
-export const registerUser = async (req, res) => {
-  const { email, password } = req.body;
+const authService = new AuthService();
+
+/**
+ * Register a new user
+ * - Validates input
+ * - Delegates to AuthService
+ * - Returns appropriate HTTP response
+ */
+export const registerUser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
-    const userExists = await User.findOne({ email });
-    if (userExists) return res.status(400).send("User already exists");
+    const { email, password } = req.body;
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    // Basic input validation
+    if (!email || !password) {
+      res.status(400).json({ message: "Email and password are required" });
+      return;
+    }
 
-    const user = new User({ email, password: hashedPassword });
-    await user.save();
-    res.status(201).send("User registered");
+    // Delegate to service layer
+    const result = await authService.register({ email, password });
+
+    if (!result.success) {
+      const statusCode = result.message === "User already exists" ? 409 : 400;
+      res.status(statusCode).json({ message: result.message });
+      return;
+    }
+
+    res.status(201).json({
+      message: result.message,
+      userId: result.userId,
+    });
   } catch (error) {
-    res.status(500).send("Server error");
+    // Log error internally, don't expose stack trace to client
+    console.error("Registration controller error:", error);
+    res.status(500).json({ message: "An error occurred during registration" });
   }
 };
 
-// Login a user
-export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+/**
+ * Login a user
+ * - Validates input
+ * - Delegates to AuthService
+ * - Sets JWT token in HttpOnly cookie
+ * - Returns appropriate HTTP response
+ */
+export const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).send("Invalid credentials");
+    const { email, password } = req.body;
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).send("Invalid credentials");
+    // Basic input validation
+    if (!email || !password) {
+      res.status(400).json({ message: "Email and password are required" });
+      return;
+    }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, {
-      expiresIn: "1h",
+    // Delegate to service layer
+    const result = await authService.login({ email, password });
+
+    if (!result.success) {
+      res.status(401).json({ message: result.message });
+      return;
+    }
+
+    // Set JWT token in HttpOnly cookie
+    res.cookie("token", result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+      sameSite: "strict",
+      maxAge: 3600000, // 1 hour in milliseconds
     });
-    res.cookie("token", token, { httpOnly: true }).send("Login successful");
+
+    res.status(200).json({
+      message: result.message,
+      userId: result.userId,
+    });
   } catch (error) {
-    res.status(500).send("Server error");
+    // Log error internally, don't expose stack trace to client
+    console.error("Login controller error:", error);
+    res.status(500).json({ message: "An error occurred during login" });
+  }
+};
+
+/**
+ * Logout a user
+ * - Clears the JWT token cookie
+ */
+export const logoutUser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    res.status(200).json({ message: "Logout successful" });
+  } catch (error) {
+    console.error("Logout controller error:", error);
+    res.status(500).json({ message: "An error occurred during logout" });
   }
 };

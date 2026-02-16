@@ -2,9 +2,11 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon -- src/server.ts",
+    "build": "tsc --build"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +21,7 @@
     "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.1",
+    "nodemon": "^3.1.11",
     "rate-limit": "^0.1.1"
   },
   "devDependencies": {
@@ -28,6 +31,7 @@
     "@types/joi": "^17.2.2",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

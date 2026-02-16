@@ -1,55 +1,293 @@
-// Task controller
-import Task from "../models/task.model";
+// Task controller - Uses Service Repository pattern
+import type { Request, Response } from "express";
+import { TaskService } from "../services/task.service.js";
 
-// Get all tasks for the authenticated user
-export const getTasks = async (req, res) => {
+// Extend Express Request type to include userId from auth middleware
+interface AuthenticatedRequest extends Request {
+  userId?: string;
+}
+
+const taskService = new TaskService();
+
+/**
+ * Get all tasks for the authenticated user
+ * - Only returns tasks belonging to the logged-in user
+ */
+export const getTasks = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
   try {
-    const tasks = await Task.find({ userId: req.userId });
-    res.json(tasks);
-  } catch (error) {
-    res.status(500).send("Server error");
-  }
-};
+    const userId = req.userId;
 
-// Create a new task
-export const createTask = async (req, res) => {
-  const { title, description } = req.body;
-  try {
-    const newTask = new Task({ userId: req.userId, title, description });
-    await newTask.save();
-    res.status(201).json(newTask);
-  } catch (error) {
-    res.status(500).send("Server error");
-  }
-};
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
 
-// Update a task
-export const updateTask = async (req, res) => {
-  const { title, description } = req.body;
-  try {
-    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
-    if (!task) return res.status(404).send("Task not found");
+    // Delegate to service layer
+    const result = await taskService.getUserTasks(userId);
 
-    task.title = title || task.title;
-    task.description = description || task.description;
-    await task.save();
+    if (!result.success) {
+      res.status(400).json({ message: result.message });
+      return;
+    }
 
-    res.json(task);
-  } catch (error) {
-    res.status(500).send("Server error");
-  }
-};
-
-// Delete a task
-export const deleteTask = async (req, res) => {
-  try {
-    const task = await Task.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.userId,
+    res.status(200).json({
+      message: result.message,
+      tasks: result.tasks,
     });
-    if (!task) return res.status(404).send("Task not found");
-    res.status(204).send();
   } catch (error) {
-    res.status(500).send("Server error");
+    // Log error internally, don't expose stack trace to client
+    console.error("Get tasks controller error:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while retrieving tasks" });
+  }
+};
+
+/**
+ * Get a single task by ID
+ * - Ensures the task belongs to the logged-in user
+ */
+export const getTaskById = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.userId;
+    const taskId = req.params.id;
+
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (!taskId) {
+      res.status(400).json({ message: "Task ID is required" });
+      return;
+    }
+
+    if (Array.isArray(taskId)) {
+      res.status(400).json({ message: "Invalid Task ID" });
+      return;
+    }
+
+    // Delegate to service layer
+    const result = await taskService.getTaskById(taskId, userId);
+
+    if (!result.success) {
+      const statusCode = result.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: result.message });
+      return;
+    }
+
+    res.status(200).json({
+      message: result.message,
+      task: result.task,
+    });
+  } catch (error) {
+    console.error("Get task by ID controller error:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while retrieving the task" });
+  }
+};
+
+/**
+ * Create a new task
+ * - Validates input
+ * - Associates task with the logged-in user
+ */
+export const createTask = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.userId;
+    const { title, description, status } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    // Delegate to service layer
+    const result = await taskService.createTask(
+      userId,
+      title,
+      description,
+      status,
+    );
+
+    if (!result.success) {
+      res.status(400).json({ message: result.message });
+      return;
+    }
+
+    res.status(201).json({
+      message: result.message,
+      task: result.task,
+    });
+  } catch (error) {
+    console.error("Create task controller error:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while creating the task" });
+  }
+};
+
+/**
+ * Update an existing task
+ * - Validates input
+ * - Ensures only the task owner can update it
+ */
+export const updateTask = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.userId;
+    const taskId = req.params.id;
+    const { title, description, status } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (!taskId) {
+      res.status(400).json({ message: "Task ID is required" });
+      return;
+    }
+
+    if (Array.isArray(taskId)) {
+      res.status(400).json({ message: "Invalid Task ID" });
+      return;
+    }
+
+    // Delegate to service layer
+    const result = await taskService.updateTask(taskId, userId, {
+      title,
+      description,
+      status,
+    });
+
+    if (!result.success) {
+      const statusCode =
+        result.message.includes("not found") ||
+        result.message.includes("permission")
+          ? 404
+          : 400;
+      res.status(statusCode).json({ message: result.message });
+      return;
+    }
+
+    res.status(200).json({
+      message: result.message,
+      task: result.task,
+    });
+  } catch (error) {
+    console.error("Update task controller error:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while updating the task" });
+  }
+};
+
+/**
+ * Delete a task
+ * - Ensures only the task owner can delete it
+ */
+export const deleteTask = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.userId;
+    const taskId = req.params.id;
+
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (!taskId) {
+      res.status(400).json({ message: "Task ID is required" });
+      return;
+    }
+
+    if (Array.isArray(taskId)) {
+      res.status(400).json({ message: "Invalid Task ID" });
+      return;
+    }
+
+    // Delegate to service layer
+    const result = await taskService.deleteTask(taskId, userId);
+
+    if (!result.success) {
+      const statusCode =
+        result.message.includes("not found") ||
+        result.message.includes("permission")
+          ? 404
+          : 400;
+      res.status(statusCode).json({ message: result.message });
+      return;
+    }
+
+    res.status(200).json({
+      message: result.message,
+    });
+  } catch (error) {
+    console.error("Delete task controller error:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while deleting the task" });
+  }
+};
+
+/**
+ * Get tasks by status for the authenticated user
+ */
+export const getTasksByStatus = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.userId;
+    const status = req.params.status;
+
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (!status) {
+      res.status(400).json({ message: "Status is required" });
+      return;
+    }
+
+    if (Array.isArray(status)) {
+      res.status(400).json({ message: "Invalid status" });
+      return;
+    }
+
+    // Delegate to service layer
+    const result = await taskService.getTasksByStatus(userId, status);
+
+    if (!result.success) {
+      res.status(400).json({ message: result.message });
+      return;
+    }
+
+    res.status(200).json({
+      message: result.message,
+      tasks: result.tasks,
+    });
+  } catch (error) {
+    console.error("Get tasks by status controller error:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while retrieving tasks" });
   }
 };

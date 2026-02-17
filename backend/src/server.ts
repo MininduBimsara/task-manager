@@ -14,11 +14,24 @@ dotenv.config();
 
 const app = express();
 
+// Allowed origins for CORS
+const allowedOrigins = [
+  process.env.FRONTEND_URL, // Production Vercel frontend URL
+  "http://localhost:3000", // Local development
+].filter(Boolean) as string[];
+
 // Security middleware
 app.use(helmet()); // Sets various HTTP security headers (CSP, X-Frame-Options, etc.)
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000", // Restrict to frontend origin
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true, // Allow cookies to be sent cross-origin
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],

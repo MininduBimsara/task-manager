@@ -31,13 +31,16 @@ This is the frontend application for the Task Manager, built with **Next.js 16**
 - ✅ Next.js 16 App Router architecture
 - ✅ React 19 with Server & Client Components
 - ✅ Redux Toolkit for centralized state management
+- ✅ Redux Persist for session persistence across refreshes
 - ✅ Async thunks for all API operations
 - ✅ Cookie-based authentication (HttpOnly tokens managed by backend)
 - ✅ Full TypeScript with strict mode
 - ✅ Tailwind CSS 4 for styling
-- ✅ Joi for client-side input validation
+- ✅ Mobile responsive UI (card-based layout on small screens)
+- ✅ Toast notifications via react-toastify
 - ✅ Typed Redux hooks for type-safe component integration
 - ✅ Axios HTTP client with typed error handling
+- ✅ Vercel-ready deployment
 
 ---
 
@@ -119,16 +122,19 @@ This is the frontend application for the Task Manager, built with **Next.js 16**
 ```
 frontend/
 ├── app/
-│   ├── globals.css                    # Global styles (Tailwind CSS 4)
+│   ├── globals.css                    # Global styles + mobile responsive media queries
 │   ├── layout.tsx                     # Root layout (wraps children with ReduxProvider)
-│   ├── page.tsx                       # Home page
+│   ├── page.tsx                       # Home page (redirects to /login)
+│   ├── login/page.tsx                 # Login page
+│   ├── register/page.tsx              # Registration page
+│   ├── dashboard/page.tsx             # Dashboard page
 │   │
 │   └── Redux/
 │       ├── hooks.ts                   # Typed useAppDispatch & useAppSelector hooks
-│       ├── provider.tsx               # "use client" ReduxProvider component
+│       ├── provider.tsx               # ReduxProvider with PersistGate & rehydration
 │       │
 │       ├── Store/
-│       │   └── store.ts              # Redux store configuration, RootState & AppDispatch types
+│       │   └── store.ts              # Redux store + persistor configuration
 │       │
 │       ├── Slicers/
 │       │   ├── authSlice.ts          # Auth state: userId, isAuthenticated, loading, error
@@ -138,13 +144,21 @@ frontend/
 │           ├── authThunks.ts         # Async thunks: register, login, logout, refresh
 │           └── taskThunks.ts         # Async thunks: CRUD operations + filter by status
 │
-├── public/                            # Static assets
+├── components/
+│   ├── Dashboard.tsx                  # Main task dashboard (table/card layout)
+│   ├── Login.tsx                      # Login form component
+│   ├── Register.tsx                   # Registration form component
+│   ├── ViewTaskModal.tsx              # View task details modal
+│   ├── UpdateTaskModal.tsx            # Edit task modal
+│   └── DeleteTaskModal.tsx            # Delete confirmation modal
+│
+├── .env.example                       # Environment variable template
 ├── eslint.config.mjs                  # ESLint configuration
 ├── next.config.ts                     # Next.js configuration
-├── next-env.d.ts                      # Next.js TypeScript declarations
 ├── package.json                       # Dependencies & scripts
 ├── postcss.config.mjs                 # PostCSS configuration (Tailwind)
-└── tsconfig.json                      # TypeScript configuration (strict mode)
+├── tsconfig.json                      # TypeScript configuration (strict mode)
+└── FRONTEND_DOCUMENTATION.md          # This file
 ```
 
 ---
@@ -167,19 +181,15 @@ frontend/
 | `@reduxjs/toolkit` | `^2.11.2` | Redux Toolkit (createSlice, createAsyncThunk, configureStore) |
 | `react-redux`      | `^9.2.0`  | React bindings for Redux                                      |
 | `redux`            | `^5.0.1`  | Core Redux library                                            |
+| `redux-persist`    | `^6`      | Persist auth state across page refreshes (localStorage)       |
 
-### HTTP & Validation
+### HTTP, Validation & UI
 
-| Package | Version   | Purpose                               |
-| ------- | --------- | ------------------------------------- |
-| `axios` | `^1.13.5` | HTTP client with typed error handling |
-| `joi`   | `^18.0.2` | Client-side input validation          |
-
-### Routing
-
-| Package            | Version   | Purpose             |
-| ------------------ | --------- | ------------------- |
-| `react-router-dom` | `^7.13.0` | Client-side routing |
+| Package          | Version   | Purpose                               |
+| ---------------- | --------- | ------------------------------------- |
+| `axios`          | `^1.13.5` | HTTP client with typed error handling |
+| `joi`            | `^18.0.2` | Client-side input validation          |
+| `react-toastify` | `^11`     | Toast notification system             |
 
 ### Styling (Dev)
 
@@ -194,10 +204,10 @@ frontend/
 
 ### Environment Variables
 
-| Variable              | Default                 | Description          |
-| --------------------- | ----------------------- | -------------------- |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:5000` | Backend API base URL |
-| `NODE_ENV`            | `development`           | Environment mode     |
+| Variable              | Required | Description                                     |
+| --------------------- | -------- | ----------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | Yes      | Backend API base URL (no hardcoded fallback)    |
+| `NODE_ENV`            | No       | Environment mode (`development` / `production`) |
 
 > `NEXT_PUBLIC_` prefix is required for Next.js to expose variables to client-side code.
 
@@ -227,32 +237,47 @@ npm run lint      # Run ESLint
 
 **File:** `app/Redux/Store/store.ts`
 
-The store is configured using Redux Toolkit's `configureStore` with two slice reducers:
+The store is configured using Redux Toolkit's `configureStore` with **redux-persist** for session persistence:
 
 ```typescript
+import { persistStore, persistReducer } from "redux-persist";
+import storage from "redux-persist/lib/storage";
+
+// Auth state is persisted to localStorage
+const authPersistConfig = { key: "auth", storage };
+
 export const store = configureStore({
   reducer: {
-    auth: authReducer, // Authentication state
-    tasks: taskReducer, // Task management state
+    auth: persistReducer(authPersistConfig, authReducer),
+    tasks: taskReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredPaths: ["tasks.tasks"], // Allow date strings in task payloads
+        ignoredActions: [
+          "persist/PERSIST",
+          "persist/REHYDRATE",
+          "persist/REGISTER",
+          "persist/PURGE",
+          "persist/FLUSH",
+        ],
+        ignoredPaths: ["tasks.tasks"],
       },
     }),
   devTools: process.env.NODE_ENV !== "production",
 });
+
+export const persistor = persistStore(store);
 ```
 
-**Exported Types:**
+**Exported Types & Objects:**
 
-| Type          | Description                                           |
+| Export        | Description                                           |
 | ------------- | ----------------------------------------------------- |
+| `store`       | Redux store instance                                  |
+| `persistor`   | Redux-persist persistor (used for purging on logout)  |
 | `RootState`   | `ReturnType<typeof store.getState>` — Full state tree |
 | `AppDispatch` | `typeof store.dispatch` — Dispatch with thunk support |
-
-The store automatically includes `redux-thunk` middleware (bundled with Redux Toolkit's default middleware).
 
 ---
 
@@ -464,44 +489,37 @@ export default function TaskList() {
 
 **File:** `app/Redux/provider.tsx`
 
-A client component that wraps the application tree with the Redux `<Provider>`:
+A client component that wraps the application with Redux `<Provider>` and handles redux-persist rehydration using `useSyncExternalStore` (avoids the `setState-in-useEffect` lint violation):
 
 ```tsx
 "use client";
-
+import { useSyncExternalStore } from "react";
 import { Provider } from "react-redux";
-import { store } from "./Store/store";
+import { store, persistor } from "./Store/store";
+
+function usePersistorRehydrated() {
+  return useSyncExternalStore(
+    (cb) => {
+      const unsub = persistor.subscribe(cb);
+      return () => unsub();
+    },
+    () => persistor.getState().bootstrapped,
+    () => false,
+  );
+}
 
 export default function ReduxProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const isRehydrated = usePersistorRehydrated();
+  if (!isRehydrated) return null; // Wait for localStorage state to load
   return <Provider store={store}>{children}</Provider>;
 }
 ```
 
-> The `"use client"` directive is required because Redux uses React Context, which is only available in Client Components. This is integrated into the root `layout.tsx`.
-
-**Integration in `layout.tsx`:**
-
-```tsx
-import ReduxProvider from "./Redux/provider";
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        <ReduxProvider>{children}</ReduxProvider>
-      </body>
-    </html>
-  );
-}
-```
+> The provider waits until redux-persist has rehydrated the auth state from localStorage before rendering the app tree. This prevents flash-of-unauthenticated-content on page refresh.
 
 ---
 
@@ -585,11 +603,13 @@ type AppDispatch = typeof store.dispatch;
 
 ### Base URL
 
-All API requests are routed through a single base URL:
+All API requests use the environment variable with **no hardcoded fallback**:
 
 ```typescript
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 ```
+
+> This must be set in `.env.local` (locally) or in Vercel's environment variable settings (production).
 
 ### Request Configuration
 
@@ -722,15 +742,65 @@ User clicks task → dispatch(fetchTaskById(taskId))
 
 ---
 
-## Styling
+## Components
 
-The application uses **Tailwind CSS 4** with the following configuration:
+### Dashboard (`components/Dashboard.tsx`)
+
+Main task management view with:
+
+- Task creation form (inline expandable panel)
+- Task table with grid layout (desktop) / card layout (mobile)
+- Search/filter functionality
+- View, Edit, Delete actions per task
+- Logout button (dispatches `logoutUser`, purges persist, redirects)
+
+### Login & Register (`components/Login.tsx`, `components/Register.tsx`)
+
+Authentication forms with:
+
+- Joi client-side validation
+- Toast notifications for success/error
+- Links to switch between login and register
+
+### Modals
+
+| Component             | Purpose                                |
+| --------------------- | -------------------------------------- |
+| `ViewTaskModal.tsx`   | Read-only task detail view             |
+| `UpdateTaskModal.tsx` | Edit form (title, description, status) |
+| `DeleteTaskModal.tsx` | Confirmation dialog for deletion       |
+
+All modals use the `modal-body` CSS class for mobile responsiveness.
+
+---
+
+## Styling & Responsiveness
+
+The application uses **Tailwind CSS 4** with custom responsive overrides in `globals.css`:
 
 - **PostCSS plugin:** `@tailwindcss/postcss` (configured in `postcss.config.mjs`)
 - **Import method:** `@import "tailwindcss"` in `globals.css`
-- **Fonts:** Geist Sans and Geist Mono loaded via `next/font/google`
 - **Dark mode:** Automatic via `prefers-color-scheme` media query
 - **CSS variables:** `--background` and `--foreground` for theme colors
+- **Component styling:** Inline styles with CSS class hooks for responsive overrides
+
+### Mobile Responsive Breakpoints
+
+| Breakpoint | Behavior                                                      |
+| ---------- | ------------------------------------------------------------- |
+| `≤ 768px`  | Header stacks, search full-width, table → cards, modals adapt |
+| `≤ 480px`  | Buttons full-width, reduced padding, smaller heading          |
+
+---
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Import the GitHub repo on [vercel.com](https://vercel.com)
+2. Set **Root Directory** to `frontend`
+3. Add environment variable: `NEXT_PUBLIC_API_URL` = your deployed backend URL
+4. Deploy — Vercel auto-detects Next.js
 
 ---
 
@@ -740,7 +810,7 @@ The application uses **Tailwind CSS 4** with the following configuration:
 
 - Node.js (v18+)
 - npm
-- Backend server running on port 5000 (or configured via `NEXT_PUBLIC_API_URL`)
+- Backend server running (URL configured via `NEXT_PUBLIC_API_URL` in `.env.local`)
 
 ### Getting Started
 
@@ -748,6 +818,10 @@ The application uses **Tailwind CSS 4** with the following configuration:
 # Install dependencies
 cd frontend
 npm install
+
+# Copy environment template
+cp .env.example .env.local
+# Edit .env.local with your backend URL
 
 # Start development server
 npm run dev

@@ -59,18 +59,19 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Set JWT access token in HttpOnly cookie
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("token", result.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "strict", // "none" needed for cross-origin Vercel deployment
       maxAge: 15 * 60 * 1000, // 15 minutes (matches JWT expiry)
     });
 
     // Set refresh token in a separate HttpOnly cookie
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "strict",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/auth/refresh", // Only sent to the refresh endpoint
     });
@@ -112,18 +113,19 @@ export const refreshToken = async (
     }
 
     // Set new access token cookie
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("token", result.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "strict",
       maxAge: 15 * 60 * 1000,
     });
 
     // Set new refresh token cookie (rotation)
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "strict",
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/auth/refresh",
     });
@@ -153,16 +155,17 @@ export const logoutUser = async (
       await authService.logout(req.userId);
     }
 
+    const isProduction = process.env.NODE_ENV === "production";
     res.clearCookie("token", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "strict",
     });
 
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "strict",
       path: "/auth/refresh",
     });
 

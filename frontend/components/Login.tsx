@@ -52,7 +52,7 @@ const Login = () => {
       const resultAction = await dispatch(loginUser({ email, password }));
       if (loginUser.fulfilled.match(resultAction)) {
         toast.success("Login successful!");
-        router.push("/");
+        router.push("/dashboard");
       } else {
         if (resultAction.payload) {
           toast.error(resultAction.payload as string);

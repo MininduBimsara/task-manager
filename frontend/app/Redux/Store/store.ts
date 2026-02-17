@@ -26,6 +26,8 @@ export const store = configureStore({
           "persist/PERSIST",
           "persist/REHYDRATE",
           "persist/REGISTER",
+          "persist/PURGE",
+          "persist/FLUSH",
         ],
         ignoredPaths: ["tasks.tasks"],
       },

@@ -30,7 +30,29 @@ export default function RootLayout({
       <body className={`antialiased`}>
         <ReduxProvider>
           {children}
-          <ToastContainer />
+          <ToastContainer
+            position="bottom-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="dark"
+            toastStyle={{
+              background:
+                "linear-gradient(145deg, rgba(30,30,60,0.95), rgba(15,15,35,0.98))",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: "12px",
+              color: "#e2e8f0",
+              fontFamily: "'Inter', 'Segoe UI', sans-serif",
+              fontSize: "0.875rem",
+              boxShadow:
+                "0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05)",
+              backdropFilter: "blur(12px)",
+            }}
+          />
         </ReduxProvider>
       </body>
     </html>

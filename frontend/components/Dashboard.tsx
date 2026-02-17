@@ -3,13 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../app/Redux/hooks";
 import { fetchTasks, createTask } from "../app/Redux/Thunks/taskThunks";
+import { logoutUser } from "../app/Redux/Thunks/authThunks";
+import { persistor } from "../app/Redux/Store/store";
 import type { Task } from "../app/Redux/Slicers/taskSlice";
 import ViewTaskModal from "./ViewTaskModal";
 import UpdateTaskModal from "./UpdateTaskModal";
 import DeleteTaskModal from "./DeleteTaskModal";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 const Dashboard: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -205,43 +206,6 @@ const Dashboard: React.FC = () => {
           padding: "40px 24px",
         }}
       >
-        {/* Top Navigation */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "12px",
-          }}
-        >
-          <Link
-            href="/"
-            style={{
-              color: "#94a3b8",
-              fontSize: "0.85rem",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              transition: "color 0.2s",
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Home
-          </Link>
-        </div>
-
         {/* Header */}
         <div
           style={{
@@ -373,6 +337,54 @@ const Dashboard: React.FC = () => {
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               New Task
+            </button>
+
+            {/* Logout Button */}
+            <button
+              onClick={async () => {
+                await dispatch(logoutUser());
+                await persistor.purge();
+                router.push("/login");
+              }}
+              style={{
+                padding: "9px 18px",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: "10px",
+                background: "rgba(239,68,68,0.1)",
+                color: "#f87171",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "background 0.2s, border-color 0.2s",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(239,68,68,0.2)";
+                e.currentTarget.style.borderColor = "rgba(239,68,68,0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(239,68,68,0.1)";
+                e.currentTarget.style.borderColor = "rgba(239,68,68,0.3)";
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Logout
             </button>
           </div>
         </div>
@@ -929,6 +941,7 @@ const Dashboard: React.FC = () => {
       )}
       {editTask && (
         <UpdateTaskModal
+          key={editTask._id}
           task={editTask}
           isOpen={!!editTask}
           onClose={() => setEditTask(null)}

@@ -1,28 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Provider } from "react-redux";
 import { store, persistor } from "./Store/store";
 
+function usePersistorRehydrated() {
+  return useSyncExternalStore(
+    (callback) => {
+      const unsubscribe = persistor.subscribe(callback);
+      return unsubscribe;
+    },
+    () => persistor.getState().bootstrapped,
+    () => false,
+  );
+}
+
 function PersistGateClient({ children }: { children: React.ReactNode }) {
-  const [isRehydrated, setIsRehydrated] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = persistor.subscribe(() => {
-      const { bootstrapped } = persistor.getState();
-      if (bootstrapped) {
-        setIsRehydrated(true);
-        unsubscribe();
-      }
-    });
-
-    // Check if already bootstrapped
-    if (persistor.getState().bootstrapped) {
-      setIsRehydrated(true);
-    }
-
-    return unsubscribe;
-  }, []);
+  const isRehydrated = usePersistorRehydrated();
 
   if (!isRehydrated) return null;
   return <>{children}</>;

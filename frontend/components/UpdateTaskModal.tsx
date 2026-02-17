@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../app/Redux/hooks";
 import { updateTask } from "../app/Redux/Thunks/taskThunks";
 import { toast } from "react-toastify";
@@ -25,14 +23,6 @@ const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({
   const [status, setStatus] = useState<"pending" | "in-progress" | "completed">(
     task.status,
   );
-
-  useEffect(() => {
-    if (isOpen) {
-      setTitle(task.title);
-      setDescription(task.description || "");
-      setStatus(task.status);
-    }
-  }, [isOpen, task]);
 
   if (!isOpen) return null;
 

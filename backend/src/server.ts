@@ -33,18 +33,33 @@ app.use(globalLimiter); // Global rate limiting: 100 requests per 15 minutes
 app.use("/auth", authRoutes);
 app.use("/api", taskRoutes);
 
-const PORT = process.env.PORT || 5000;
-
-const startServer = async () => {
-  try {
+// Connect to DB on cold start
+let isConnected = false;
+const ensureDbConnected = async () => {
+  if (!isConnected) {
     await connectDB();
-    app.listen(PORT, () => {
-      /* console.log(`Server running on port ${PORT}`) */
-    });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
+    isConnected = true;
   }
 };
 
-startServer();
+// For local development: start the server
+const PORT = process.env.PORT || 5000;
+
+if (process.env.NODE_ENV !== "production") {
+  const startServer = async () => {
+    try {
+      await ensureDbConnected();
+      app.listen(PORT, () => {
+        /* console.log(`Server running on port ${PORT}`) */
+      });
+    } catch (error) {
+      console.error("Failed to start server:", error);
+      process.exit(1);
+    }
+  };
+  startServer();
+}
+
+// Export for Vercel serverless
+export { app, ensureDbConnected };
+export default app;

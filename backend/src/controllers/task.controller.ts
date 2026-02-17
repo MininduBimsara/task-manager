@@ -1,11 +1,7 @@
 // Task controller - Uses Service Repository pattern
-import type { Request, Response } from "express";
+import type { Response } from "express";
+import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import { TaskService } from "../services/task.service.js";
-
-// Extend Express Request type to include userId from auth middleware
-interface AuthenticatedRequest extends Request {
-  userId?: string;
-}
 
 const taskService = new TaskService();
 

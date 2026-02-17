@@ -5,6 +5,7 @@ import type { Document } from "mongoose";
 export interface IUser extends Document {
   email: string;
   password: string;
+  refreshToken?: string | null;
   createdAt: Date;
 }
 
@@ -46,6 +47,27 @@ export class UserRepository {
   }
 
   /**
+   * Update a user's refresh token
+   */
+  async updateRefreshToken(
+    userId: string,
+    refreshToken: string | null,
+  ): Promise<IUser | null> {
+    return await User.findByIdAndUpdate(
+      userId,
+      { refreshToken },
+      { new: true },
+    );
+  }
+
+  /**
+   * Find a user by refresh token
+   */
+  async findByRefreshToken(refreshToken: string): Promise<IUser | null> {
+    return await User.findOne({ refreshToken });
+  }
+
+  /**
    * Delete a user by ID
    */
   async deleteById(userId: string): Promise<IUser | null> {
@@ -64,6 +86,6 @@ export class UserRepository {
    * Get all users (useful for admin purposes)
    */
   async findAll(): Promise<IUser[]> {
-    return await User.find().select("-password");
+    return await User.find().select("-password -refreshToken");
   }
 }

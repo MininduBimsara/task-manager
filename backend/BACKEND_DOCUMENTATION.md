@@ -6,33 +6,40 @@
 2. [Architecture](#architecture)
 3. [Project Structure](#project-structure)
 4. [Design Patterns](#design-patterns)
-5. [Technology Stack](#technology-stack)
+5. [Technology Stack & Dependencies](#technology-stack--dependencies)
 6. [Configuration](#configuration)
 7. [Database Models](#database-models)
 8. [Authentication System](#authentication-system)
 9. [Task Management System](#task-management-system)
-10. [API Endpoints](#api-endpoints)
-11. [Security Features](#security-features)
-12. [Error Handling](#error-handling)
-13. [Development Guide](#development-guide)
+10. [Middleware](#middleware)
+11. [Input Validation](#input-validation)
+12. [API Endpoints](#api-endpoints)
+13. [Security Features](#security-features)
+14. [Error Handling](#error-handling)
+15. [Development Guide](#development-guide)
 
 ---
 
 ## Overview
 
-This is a comprehensive Task Manager backend API built with Node.js, Express, TypeScript, and MongoDB. The application implements a **Service Repository Pattern** for clean architecture, strict type safety with TypeScript, and robust security features including JWT-based authentication with HttpOnly cookies.
+This is a comprehensive Task Manager backend API built with Node.js, Express, TypeScript, and MongoDB. The application implements a **Service Repository Pattern** for clean architecture, strict type safety with TypeScript, and robust security features including JWT-based authentication with HttpOnly cookies, refresh token rotation, rate limiting, and input validation with Joi.
 
 ### Key Features
 
-- ✅ User authentication (register, login, logout)
+- ✅ User authentication (register, login, logout, **token refresh**)
 - ✅ Task CRUD operations with ownership verification
-- ✅ JWT-based authentication with HttpOnly cookies
-- ✅ Password hashing with bcryptjs
+- ✅ JWT access token (15 min) + refresh token (7 days) with **rotation**
+- ✅ **HttpOnly cookies** for both access & refresh tokens
+- ✅ Password hashing with bcryptjs (10 salt rounds)
+- ✅ **Rate limiting** on all routes (stricter on auth endpoints)
+- ✅ **Joi validation** schemas for all input
+- ✅ **Helmet** HTTP security headers (CSP, X-Frame-Options, etc.)
+- ✅ **NoSQL injection prevention** via custom sanitize middleware
+- ✅ **CORS** configured with restricted origins
 - ✅ Service Repository Pattern for separation of concerns
-- ✅ Comprehensive input validation
-- ✅ Type-safe TypeScript implementation
+- ✅ Full TypeScript with strict mode
 - ✅ ES Modules (modern JavaScript)
-- ✅ Security best practices (no stack trace leakage)
+- ✅ Secure error handling (no stack trace leakage)
 
 ---
 
@@ -40,9 +47,19 @@ This is a comprehensive Task Manager backend API built with Node.js, Express, Ty
 
 ### Service Repository Pattern
 
-The application follows a **3-tier architecture**:
+The application follows a **layered architecture** with additional middleware for validation & security:
 
 ```
+┌─────────────────────────────────────────────┐
+│          Middleware Layer                     │
+│  (Security, Auth, Validation, Rate Limiting) │
+│  - auth.middleware.ts                        │
+│  - validate.middleware.ts                    │
+│  - rateLimiter.middleware.ts                 │
+│  + helmet, cors, mongoSanitize (in server)   │
+└──────────────┬──────────────────────────────┘
+               │
+               ▼
 ┌─────────────────────────────────────────────┐
 │          Controllers Layer                   │
 │  (HTTP Request/Response Handling)            │
@@ -81,7 +98,7 @@ The application follows a **3-tier architecture**:
 - **Testability**: Easy to mock dependencies and write unit tests
 - **Maintainability**: Changes in one layer don't affect others
 - **Reusability**: Services and repositories can be reused across controllers
-- **Type Safety**: Full TypeScript support with interfaces
+- **Type Safety**: Full TypeScript support with interfaces and DTOs
 
 ---
 
@@ -91,57 +108,45 @@ The application follows a **3-tier architecture**:
 backend/
 ├── src/
 │   ├── config/
-│   │   ├── db.ts              # MongoDB connection configuration
-│   │   └── env.ts             # Environment variables setup
+│   │   ├── db.ts                       # MongoDB connection configuration
+│   │   └── env.ts                      # Environment variables setup
 │   │
 │   ├── models/
-│   │   ├── user.model.ts      # User Mongoose schema
-│   │   └── task.model.ts      # Task Mongoose schema
+│   │   ├── user.model.ts               # User Mongoose schema
+│   │   └── task.model.ts               # Task Mongoose schema
 │   │
 │   ├── repositories/
-│   │   ├── user.repository.ts # User database operations
-│   │   └── task.repository.ts # Task database operations
+│   │   ├── user.repository.ts          # User database operations
+│   │   └── task.repository.ts          # Task database operations
 │   │
 │   ├── services/
-│   │   ├── auth.service.ts    # Authentication business logic
-│   │   └── task.service.ts    # Task business logic
+│   │   ├── auth.service.ts             # Authentication business logic
+│   │   └── task.service.ts             # Task business logic
 │   │
 │   ├── controllers/
-│   │   ├── auth.controller.ts # Auth HTTP handlers
-│   │   └── task.controller.ts # Task HTTP handlers
+│   │   ├── auth.controller.ts          # Auth HTTP handlers
+│   │   └── task.controller.ts          # Task HTTP handlers
 │   │
 │   ├── middleware/
-│   │   └── auth.middleware.ts # JWT authentication middleware
+│   │   ├── auth.middleware.ts          # JWT authentication middleware
+│   │   ├── validate.middleware.ts      # Joi validation middleware
+│   │   └── rateLimiter.middleware.ts   # Rate limiting middleware
+│   │
+│   ├── validators/
+│   │   ├── auth.validator.ts           # Joi schemas for auth endpoints
+│   │   └── task.validator.ts           # Joi schemas for task endpoints
 │   │
 │   ├── routes/
-│   │   ├── auth.routes.ts     # Authentication routes
-│   │   └── task.routes.ts     # Task routes
+│   │   ├── auth.routes.ts              # Authentication routes
+│   │   └── task.routes.ts              # Task routes
 │   │
-│   └── server.ts              # Express server entry point
+│   └── server.ts                       # Express server entry point
 │
-├── package.json               # Dependencies and scripts
-├── tsconfig.json             # TypeScript configuration
-└── .env                      # Environment variables (not in repo)
+├── .env.example                        # Environment variables template
+├── package.json                        # Dependencies and scripts
+├── tsconfig.json                       # TypeScript configuration
+└── Task_Manager_API.postman_collection.json  # API testing collection
 ```
-
-### Development Tooling
-
-**nodemon.json** - Auto-restart configuration for development:
-
-```json
-{
-  "watch": ["src"],
-  "ext": "ts,json",
-  "ignore": ["src/**/*.test.ts"],
-  "exec": "tsx",
-  "delay": 500
-}
-```
-
-- Watches `src/` directory for TypeScript and JSON changes
-- Uses `tsx` as the TypeScript execution engine (replaces `ts-node`)
-- Ignores test files
-- 500ms delay before restarting
 
 ---
 
@@ -156,6 +161,10 @@ class UserRepository {
   async create(email: string, hashedPassword: string): Promise<IUser>;
   async findByEmail(email: string): Promise<IUser | null>;
   async findById(userId: string): Promise<IUser | null>;
+  async updateRefreshToken(
+    userId: string,
+    refreshToken: string | null,
+  ): Promise<IUser | null>;
 }
 ```
 
@@ -165,8 +174,11 @@ class UserRepository {
 class AuthService {
   async register(registerData: RegisterDTO): Promise<AuthResponse>;
   async login(loginData: LoginDTO): Promise<AuthResponse>;
+  async refresh(refreshToken: string): Promise<AuthResponse>;
+  async logout(userId: string): Promise<AuthResponse>;
   private async hashPassword(password: string): Promise<string>;
   private generateToken(userId: string): string;
+  private generateRefreshToken(): string;
 }
 ```
 
@@ -182,18 +194,12 @@ export const registerUser = async (
 };
 ```
 
-### 2. Dependency Injection
+### 2. Middleware Chain Pattern
 
-Services instantiate their dependencies:
+Each route passes through a chain of middleware before reaching the controller:
 
-```typescript
-export class AuthService {
-  private userRepository: UserRepository;
-
-  constructor() {
-    this.userRepository = new UserRepository();
-  }
-}
+```
+Request → Rate Limiter → Joi Validation → Auth Middleware → Controller
 ```
 
 ### 3. DTO Pattern (Data Transfer Objects)
@@ -210,65 +216,59 @@ export interface AuthResponse {
   success: boolean;
   message: string;
   token?: string;
+  refreshToken?: string;
   userId?: string;
 }
 ```
 
 ---
 
-## Technology Stack
+## Technology Stack & Dependencies
 
 ### Core Technologies
 
-- **Node.js**: JavaScript runtime
-- **Express.js**: Web application framework
-- **TypeScript**: Type-safe JavaScript superset
-- **MongoDB**: NoSQL database
-- **Mongoose**: MongoDB ODM (Object Data Modeling)
+| Technology        | Purpose                                                               |
+| ----------------- | --------------------------------------------------------------------- |
+| **Node.js**       | JavaScript runtime for server-side execution                          |
+| **Express.js v5** | Web application framework for building REST APIs                      |
+| **TypeScript v5** | Statically typed superset of JavaScript for type safety               |
+| **MongoDB**       | NoSQL document database for data storage                              |
+| **Mongoose v9**   | MongoDB ODM (Object Data Modeling) for schema definitions and queries |
 
-### Dependencies
+### Production Dependencies
 
-```json
-{
-  "type": "module",
-  "dependencies": {
-    "bcryptjs": "^3.0.3", // Password hashing
-    "cookie-parser": "^1.4.7", // Cookie parsing middleware
-    "cors": "^2.8.6", // Cross-origin resource sharing
-    "dotenv": "^17.3.1", // Environment variables
-    "express": "^5.2.1", // Web framework
-    "helmet": "^8.1.0", // Security headers (available)
-    "joi": "^18.0.2", // Input validation (optional)
-    "jsonwebtoken": "^9.0.3", // JWT generation/verification
-    "mongoose": "^9.2.1", // MongoDB ODM
-    "nodemon": "^3.1.11", // Development auto-restart
-    "rate-limit": "^0.1.1" // Rate limiting
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cookie-parser": "^1.4.10",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/joi": "^17.2.2",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^25.2.3",
-    "tsx": "^4.21.0", // TypeScript execution engine
-    "typescript": "^5.9.3"
-  }
-}
-```
+Each library and what it does:
+
+| Package                  | Version | What It Does                                                                                                                                                                                                                                                  |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`express`**            | ^5.2.1  | **Web framework** — Handles HTTP requests, routing, middleware, and responses. The backbone of the API server.                                                                                                                                                |
+| **`mongoose`**           | ^9.2.1  | **MongoDB ODM** — Provides schema-based modeling for MongoDB. Defines data shapes (User, Task), handles queries, validation, and relationships.                                                                                                               |
+| **`bcryptjs`**           | ^3.0.3  | **Password hashing** — Hashes passwords using the bcrypt algorithm with configurable salt rounds (10). Makes stored passwords unreadable and timing-attack resistant.                                                                                         |
+| **`jsonwebtoken`**       | ^9.0.3  | **JWT authentication** — Generates and verifies JSON Web Tokens. Used for short-lived access tokens (15 min) that authenticate API requests.                                                                                                                  |
+| **`cookie-parser`**      | ^1.4.7  | **Cookie parsing** — Parses HTTP cookies from incoming requests into `req.cookies`. Required to read the JWT and refresh token from HttpOnly cookies.                                                                                                         |
+| **`cors`**               | ^2.8.6  | **Cross-Origin Resource Sharing** — Controls which frontend origins can make requests to the backend. Configured to allow only the `FRONTEND_URL` origin with credentials (cookies).                                                                          |
+| **`helmet`**             | ^8.1.0  | **HTTP security headers** — Automatically sets 15+ security-related HTTP headers including Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc. Protects against clickjacking, MIME sniffing, and other attacks. |
+| **`joi`**                | ^18.0.2 | **Input validation** — Defines declarative validation schemas. Used to validate request bodies (email format, password strength, title length, valid status values) before they reach the controller. Returns structured error messages.                      |
+| **`express-rate-limit`** | ^8.2.1  | **Rate limiting** — Limits the number of requests per IP address within a time window. Prevents brute-force attacks on login (10 req/15 min on auth routes) and DDoS on the API (100 req/15 min globally).                                                    |
+| **`dotenv`**             | ^17.3.1 | **Environment variables** — Loads variables from `.env` file into `process.env`. Keeps secrets (JWT_SECRET, MONGO_URI) out of source code.                                                                                                                    |
+| **`nodemon`**            | ^3.1.11 | **Development auto-restart** — Watches source files for changes and automatically restarts the server during development.                                                                                                                                     |
+
+### Dev Dependencies
+
+| Package          | What It Does                                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| **`typescript`** | TypeScript compiler — converts `.ts` files to JavaScript                                            |
+| **`tsx`**        | TypeScript execution engine — runs `.ts` files directly without a compile step (replaces `ts-node`) |
+| **`@types/*`**   | TypeScript type definitions for all dependencies (`express`, `cors`, `bcryptjs`, etc.)              |
 
 ### TypeScript Configuration
 
 - **Module System**: ES Modules (`module: "nodenext"`, `target: "esnext"`)
 - **Strict Mode**: Enabled for maximum type safety
 - **Isolated Modules**: Each file can be transpiled independently
-- **Source Maps**: Enabled for debugging (`sourceMap: true`)
-- **Declarations**: Generated with declaration maps (`declaration: true`, `declarationMap: true`)
+- **Source Maps**: Enabled for debugging
 - **Strict Index Access**: `noUncheckedIndexedAccess` enabled
 - **Exact Optional Properties**: `exactOptionalPropertyTypes` enabled
-- **Module Detection**: Forced (`moduleDetection: "force"`)
-- **Side Effect Imports**: `noUncheckedSideEffectImports` enabled
 
 ---
 
@@ -276,7 +276,7 @@ export interface AuthResponse {
 
 ### Environment Variables
 
-Create a `.env` file in the backend root:
+Create a `.env` file in the backend root (see `.env.example`):
 
 ```env
 # Server Configuration
@@ -285,39 +285,29 @@ NODE_ENV=development
 
 # Database
 MONGO_URI=mongodb://localhost:27017/task-manager
-# or MongoDB Atlas:
-# MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/task-manager
 
 # JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_SECRET=your_jwt_secret_here_change_this
 
-# Security
-CORS_ORIGIN=http://localhost:3000
+# CORS - Frontend URL
+FRONTEND_URL=http://localhost:3000
 ```
 
-### Database Connection (`src/config/db.ts`)
+### Server Entry Point (`src/server.ts`)
+
+The server applies middleware in this order:
 
 ```typescript
-import mongoose from "mongoose";
+app.use(helmet()); // 1. Security headers
+app.use(cors({ origin, credentials })); // 2. CORS with restricted origin
+app.use(express.json({ limit: "10kb" })); // 3. Body parser (10kb limit)
+app.use(cookieParser()); // 4. Cookie parser
+app.use(mongoSanitize); // 5. NoSQL injection prevention (custom, Express 5 compatible)
+app.use(globalLimiter); // 6. Global rate limiting (100 req/15min)
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI!);
-    console.log("MongoDB Connected");
-  } catch (error: any) {
-    console.error("MongoDB connection error:", error.message);
-    process.exit(1); // Exit with failure
-  }
-};
-
-export default connectDB;
+app.use("/auth", authRoutes); // Auth routes (+ auth rate limiter)
+app.use("/api", taskRoutes); // Task routes (+ auth middleware)
 ```
-
-**Features:**
-
-- Automatic connection retry
-- Error handling with process exit
-- Uses environment variable for connection string
 
 ---
 
@@ -326,78 +316,42 @@ export default connectDB;
 ### User Model (`src/models/user.model.ts`)
 
 ```typescript
-import mongoose from "mongoose";
-
 const userSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    unique: true, // Ensure unique emails
-    required: true, // Email is mandatory
-    index: true, // Index for fast lookups
-  },
-  password: {
-    type: String,
-    required: true, // Password is mandatory
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now, // Auto-timestamp
-  },
+  email: { type: String, unique: true, required: true, index: true },
+  password: { type: String, required: true },
+  refreshToken: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
 });
-
-const User = mongoose.model("User", userSchema);
-export { User as default };
 ```
 
-**Schema Details:**
-
-- **email**: Unique indexed field for fast authentication queries
-- **password**: Stores bcrypt hashed password (never plaintext)
-- **createdAt**: Timestamp for user registration
+| Field          | Type   | Details                                                    |
+| -------------- | ------ | ---------------------------------------------------------- |
+| `email`        | String | Unique, indexed for fast authentication lookups            |
+| `password`     | String | Stores bcrypt-hashed password (never plaintext)            |
+| `refreshToken` | String | Stores SHA-256 hashed refresh token (null when logged out) |
+| `createdAt`    | Date   | Auto-set timestamp on user registration                    |
 
 ### Task Model (`src/models/task.model.ts`)
 
 ```typescript
-import mongoose from "mongoose";
-
 const taskSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // Reference to User model
-    index: true, // Index for fast user-specific queries
-  },
-  title: {
-    type: String,
-    required: true, // Title is mandatory
-  },
-  description: {
-    type: String, // Optional description
-  },
-  status: {
-    type: String,
-    default: "pending", // Default status
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+  title: { type: String, required: true },
+  description: { type: String },
+  status: { type: String, default: "pending" },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
-
-const Task = mongoose.model("Task", taskSchema);
-export { Task as default };
 ```
 
-**Schema Details:**
-
-- **userId**: Foreign key reference to User (ensures ownership)
-- **title**: Required field for task name
-- **description**: Optional additional details
-- **status**: One of `"pending"`, `"in-progress"`, `"completed"`
-- **createdAt/updatedAt**: Automatic timestamps
+| Field         | Type     | Details                                                      |
+| ------------- | -------- | ------------------------------------------------------------ |
+| `userId`      | ObjectId | Foreign key to User (indexed for fast user-specific queries) |
+| `title`       | String   | Required, 1-200 characters                                   |
+| `description` | String   | Optional, max 1000 characters                                |
+| `status`      | String   | One of: `"pending"`, `"in-progress"`, `"completed"`          |
+| `createdAt`   | Date     | Auto-set timestamp                                           |
+| `updatedAt`   | Date     | Updated on every modification                                |
 
 ---
 
@@ -406,399 +360,52 @@ export { Task as default };
 ### Authentication Flow
 
 ```
-1. User Registration
-   ┌─────────────┐
-   │   Client    │
-   └──────┬──────┘
-          │ POST /auth/register
-          │ { email, password }
-          ▼
-   ┌─────────────────┐
-   │   Controller     │ ─► Validate input
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │    Service      │ ─► Check if user exists
-   │                 │ ─► Hash password (bcrypt)
-   │                 │ ─► Create user
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │   Repository    │ ─► Save to database
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │   Response      │ ─► 201 Created
-   │   { userId }    │
-   └─────────────────┘
+1. Register ─── POST /auth/register
+   │  Body: { email, password }
+   │  Joi validates email format + password strength
+   │  Password hashed with bcryptjs (10 salt rounds)
+   └─► 201 Created { userId }
 
-2. User Login
-   ┌─────────────┐
-   │   Client    │
-   └──────┬──────┘
-          │ POST /auth/login
-          │ { email, password }
-          ▼
-   ┌─────────────────┐
-   │   Controller     │ ─► Validate input
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │    Service      │ ─► Find user by email
-   │                 │ ─► Compare password hash
-   │                 │ ─► Generate JWT token
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │   Response      │ ─► Set HttpOnly cookie
-   │   { token }     │ ─► 200 OK
-   └─────────────────┘
+2. Login ─── POST /auth/login
+   │  Body: { email, password }
+   │  Compares password with stored hash
+   │  Generates JWT access token (15 min) + refresh token (7 days)
+   │  Sets two HttpOnly cookies: "token" and "refreshToken"
+   └─► 200 OK { userId }
 
-3. Protected Route Access
-   ┌─────────────┐
-   │   Client    │
-   └──────┬──────┘
-          │ GET /api/tasks
-          │ Cookie: token=jwt...
-          ▼
-   ┌─────────────────┐
-   │   Middleware    │ ─► Extract token from cookie
-   │                 │ ─► Verify JWT signature
-   │                 │ ─► Attach userId to request
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │   Controller     │ ─► Access req.userId
-   │                 │ ─► Process request
-   └─────────────────┘
+3. Refresh ─── POST /auth/refresh
+   │  Reads refresh token from HttpOnly cookie
+   │  Verifies against SHA-256 hash stored in DB
+   │  Issues new access token + rotates refresh token
+   └─► 200 OK { userId }
+
+4. Protected Route ─── GET /api/tasks
+   │  Auth middleware reads "token" cookie
+   │  Verifies JWT signature
+   │  Attaches userId to request
+   └─► Controller processes request
+
+5. Logout ─── POST /auth/logout
+   │  Requires authentication
+   │  Invalidates refresh token in database (sets to null)
+   │  Clears both cookies
+   └─► 200 OK
 ```
 
-### UserRepository (`src/repositories/user.repository.ts`)
+### Refresh Token Security
 
-Handles all database operations for users:
+- **Generation**: `crypto.randomBytes(40)` — 80 hex character cryptographically secure token
+- **Storage**: Only the **SHA-256 hash** is stored in the database (not the raw token)
+- **Rotation**: A new refresh token is issued on every refresh (old one invalidated)
+- **Cookie Path**: Refresh token cookie has `path: "/auth/refresh"` — only sent to the refresh endpoint
+- **Invalidation**: Set to `null` in database on logout
 
-```typescript
-export class UserRepository {
-  /**
-   * Create a new user
-   * @param email - User's email address
-   * @param hashedPassword - bcrypt hashed password
-   * @returns Created user document
-   */
-  async create(email: string, hashedPassword: string): Promise<IUser> {
-    const user = new User({ email, password: hashedPassword });
-    return await user.save();
-  }
+### Cookie Configuration
 
-  /**
-   * Find a user by email (for login)
-   */
-  async findByEmail(email: string): Promise<IUser | null> {
-    return await User.findOne({ email });
-  }
-
-  /**
-   * Find a user by ID (for authentication)
-   */
-  async findById(userId: string): Promise<IUser | null> {
-    return await User.findById(userId);
-  }
-
-  /**
-   * Update a user's password
-   */
-  async updatePassword(
-    userId: string,
-    hashedPassword: string,
-  ): Promise<IUser | null> {
-    return await User.findByIdAndUpdate(
-      userId,
-      { password: hashedPassword },
-      { new: true },
-    );
-  }
-
-  /**
-   * Delete a user by ID
-   */
-  async deleteById(userId: string): Promise<IUser | null> {
-    return await User.findByIdAndDelete(userId);
-  }
-
-  /**
-   * Check if a user exists by email
-   */
-  async existsByEmail(email: string): Promise<boolean> {
-    const user = await User.findOne({ email });
-    return user !== null;
-  }
-
-  /**
-   * Get all users (useful for admin purposes)
-   * Returns users without password field
-   */
-  async findAll(): Promise<IUser[]> {
-    return await User.find().select("-password");
-  }
-}
-```
-
-### AuthService (`src/services/auth.service.ts`)
-
-Handles authentication business logic:
-
-```typescript
-export class AuthService {
-  private userRepository: UserRepository;
-  private readonly SALT_ROUNDS = 10; // bcrypt salt rounds
-  private readonly JWT_EXPIRY = "1h"; // Token expiration
-
-  /**
-   * Register a new user
-   * Steps:
-   * 1. Validate input
-   * 2. Check if user already exists
-   * 3. Hash password with bcrypt
-   * 4. Create user in database
-   */
-  async register(registerData: RegisterDTO): Promise<AuthResponse> {
-    const { email, password } = registerData;
-
-    // Check for existing user
-    const existingUser = await this.userRepository.findByEmail(email);
-    if (existingUser) {
-      return { success: false, message: "User already exists" };
-    }
-
-    // Hash password
-    const hashedPassword = await this.hashPassword(password);
-
-    // Create user
-    const user = await this.userRepository.create(email, hashedPassword);
-
-    return {
-      success: true,
-      message: "User registered successfully",
-      userId: user._id.toString(),
-    };
-  }
-
-  /**
-   * Login a user
-   * Steps:
-   * 1. Validate input
-   * 2. Find user by email
-   * 3. Compare password with stored hash
-   * 4. Generate JWT token
-   */
-  async login(loginData: LoginDTO): Promise<AuthResponse> {
-    const { email, password } = loginData;
-
-    // Find user
-    const user = await this.userRepository.findByEmail(email);
-    if (!user) {
-      return { success: false, message: "Invalid credentials" };
-    }
-
-    // Verify password
-    const isPasswordValid = await this.verifyPassword(password, user.password);
-    if (!isPasswordValid) {
-      return { success: false, message: "Invalid credentials" };
-    }
-
-    // Generate token
-    const token = this.generateToken(user._id.toString());
-
-    return {
-      success: true,
-      message: "Login successful",
-      token,
-      userId: user._id.toString(),
-    };
-  }
-
-  /**
-   * Hash a password using bcryptjs
-   * Uses 10 salt rounds for security
-   */
-  private async hashPassword(password: string): Promise<string> {
-    const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
-    return await bcrypt.hash(password, salt);
-  }
-
-  /**
-   * Verify a password against a hash
-   */
-  private async verifyPassword(
-    password: string,
-    hash: string,
-  ): Promise<boolean> {
-    return await bcrypt.compare(password, hash);
-  }
-
-  /**
-   * Generate a JWT token
-   * Token contains userId and expires in 1 hour
-   */
-  private generateToken(userId: string): string {
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error("JWT_SECRET is not defined in environment variables");
-    }
-    return jwt.sign({ userId }, jwtSecret, { expiresIn: this.JWT_EXPIRY });
-  }
-
-  /**
-   * Verify a JWT token
-   * Returns decoded payload with userId if valid, null otherwise
-   */
-  verifyToken(token: string): { userId: string } | null {
-    try {
-      const jwtSecret = process.env.JWT_SECRET;
-      if (!jwtSecret) {
-        throw new Error("JWT_SECRET is not defined in environment variables");
-      }
-      const decoded = jwt.verify(token, jwtSecret) as { userId: string };
-      return decoded;
-    } catch (error) {
-      console.error("Error verifying token:", error);
-      return null;
-    }
-  }
-}
-```
-
-### AuthController (`src/controllers/auth.controller.ts`)
-
-Handles HTTP requests for authentication:
-
-```typescript
-/**
- * Register a new user
- * POST /auth/register
- * Body: { email: string, password: string }
- * Response: 201 Created | 400 Bad Request | 409 Conflict | 500 Error
- */
-export const registerUser = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  const { email, password } = req.body;
-
-  // Validate input
-  if (!email || !password) {
-    res.status(400).json({ message: "Email and password are required" });
-    return;
-  }
-
-  // Delegate to service
-  const result = await authService.register({ email, password });
-
-  if (!result.success) {
-    const statusCode = result.message === "User already exists" ? 409 : 400;
-    res.status(statusCode).json({ message: result.message });
-    return;
-  }
-
-  res.status(201).json({
-    message: result.message,
-    userId: result.userId,
-  });
-};
-
-/**
- * Login a user
- * POST /auth/login
- * Body: { email: string, password: string }
- * Response: 200 OK (sets HttpOnly cookie) | 401 Unauthorized | 500 Error
- */
-export const loginUser = async (req: Request, res: Response): Promise<void> => {
-  const { email, password } = req.body;
-
-  // Validate input
-  if (!email || !password) {
-    res.status(400).json({ message: "Email and password are required" });
-    return;
-  }
-
-  // Delegate to service
-  const result = await authService.login({ email, password });
-
-  if (!result.success) {
-    res.status(401).json({ message: result.message });
-    return;
-  }
-
-  // Set JWT token in HttpOnly cookie
-  res.cookie("token", result.token, {
-    httpOnly: true, // Prevents XSS attacks
-    secure: process.env.NODE_ENV === "production", // HTTPS only in production
-    sameSite: "strict", // CSRF protection
-    maxAge: 3600000, // 1 hour
-  });
-
-  res.status(200).json({
-    message: result.message,
-    userId: result.userId,
-  });
-};
-
-/**
- * Logout a user
- * POST /auth/logout
- * Response: 200 OK
- */
-export const logoutUser = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-  });
-  res.status(200).json({ message: "Logout successful" });
-};
-```
-
-### Authentication Middleware (`src/middleware/auth.middleware.ts`)
-
-Protects routes by verifying JWT tokens:
-
-```typescript
-/**
- * Authentication Middleware
- * Verifies JWT token from HttpOnly cookie
- * Attaches userId to request object if valid
- */
-export const authMiddleware = (req, res, next) => {
-  // Extract token from cookie
-  const token = req.cookies.token;
-
-  if (!token) {
-    return res.status(401).send("Unauthorized");
-  }
-
-  try {
-    // Verify JWT signature and decode payload
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
-
-    // Attach userId to request
-    req.userId = decoded.userId;
-
-    // Continue to next middleware/controller
-    next();
-  } catch (error) {
-    res.status(401).send("Unauthorized");
-  }
-};
-```
+| Cookie           | HttpOnly | Secure (prod) | SameSite | MaxAge | Path          |
+| ---------------- | -------- | ------------- | -------- | ------ | ------------- |
+| `token` (access) | ✅       | ✅            | strict   | 15 min | /             |
+| `refreshToken`   | ✅       | ✅            | strict   | 7 days | /auth/refresh |
 
 ---
 
@@ -806,553 +413,129 @@ export const authMiddleware = (req, res, next) => {
 
 ### TaskRepository (`src/repositories/task.repository.ts`)
 
-Handles all database operations for tasks:
+All task queries filter by **both `taskId` and `userId`** to enforce ownership:
 
 ```typescript
-export class TaskRepository {
-  /**
-   * Create a new task
-   */
-  async create(taskData: CreateTaskDTO): Promise<ITask> {
-    const task = new Task({
-      userId: taskData.userId,
-      title: taskData.title,
-      description: taskData.description,
-      status: taskData.status || "pending",
-      updatedAt: new Date(),
-    });
-    return await task.save();
-  }
+// Ownership enforced at query level — no way to bypass
+async findByIdAndUserId(taskId: string, userId: string): Promise<ITask | null> {
+  return await Task.findOne({ _id: taskId, userId });
+}
 
-  /**
-   * Find all tasks for a specific user
-   * Returns tasks sorted by creation date (newest first)
-   */
-  async findByUserId(userId: string): Promise<ITask[]> {
-    return await Task.find({ userId }).sort({ createdAt: -1 });
-  }
+async update(taskId: string, userId: string, updateData: UpdateTaskDTO): Promise<ITask | null> {
+  return await Task.findOneAndUpdate(
+    { _id: taskId, userId },  // Query: must match both task ID AND user ID
+    { ...updateData, updatedAt: new Date() },
+    { new: true, runValidators: true },
+  );
+}
 
-  /**
-   * Find a task by ID
-   */
-  async findById(taskId: string): Promise<ITask | null> {
-    return await Task.findById(taskId);
-  }
-
-  /**
-   * Find a task by ID and user ID (ensures ownership)
-   * Critical for security - prevents users from accessing others' tasks
-   */
-  async findByIdAndUserId(
-    taskId: string,
-    userId: string,
-  ): Promise<ITask | null> {
-    return await Task.findOne({ _id: taskId, userId });
-  }
-
-  /**
-   * Update a task
-   * Only updates if task belongs to the user
-   */
-  async update(
-    taskId: string,
-    userId: string,
-    updateData: UpdateTaskDTO,
-  ): Promise<ITask | null> {
-    return await Task.findOneAndUpdate(
-      { _id: taskId, userId }, // Query: task must belong to user
-      { ...updateData, updatedAt: new Date() },
-      { new: true, runValidators: true }, // Return updated doc, validate data
-    );
-  }
-
-  /**
-   * Delete a task
-   * Only deletes if task belongs to the user
-   */
-  async delete(taskId: string, userId: string): Promise<ITask | null> {
-    return await Task.findOneAndDelete({ _id: taskId, userId });
-  }
-
-  /**
-   * Count tasks for a user
-   */
-  async countByUserId(userId: string): Promise<number> {
-    return await Task.countDocuments({ userId });
-  }
-
-  /**
-   * Find tasks by status for a user
-   */
-  async findByUserIdAndStatus(
-    userId: string,
-    status: string,
-  ): Promise<ITask[]> {
-    return await Task.find({ userId, status }).sort({ createdAt: -1 });
-  }
-
-  /**
-   * Delete all tasks for a user
-   */
-  async deleteAllByUserId(userId: string): Promise<number> {
-    const result = await Task.deleteMany({ userId });
-    return result.deletedCount || 0;
-  }
+async delete(taskId: string, userId: string): Promise<ITask | null> {
+  return await Task.findOneAndDelete({ _id: taskId, userId });
 }
 ```
 
 ### TaskService (`src/services/task.service.ts`)
 
-Handles task business logic with comprehensive validation:
+Business logic layer with validation:
+
+- Validates userId, title (required, max 200 chars), description (max 1000 chars), status (enum)
+- Checks task ownership before every update/delete
+- Returns structured `TaskResponse` objects
+
+---
+
+## Middleware
+
+### Auth Middleware (`src/middleware/auth.middleware.ts`)
+
+Fully typed with TypeScript. Exports `AuthenticatedRequest` interface used by all controllers:
 
 ```typescript
-export class TaskService {
-  private taskRepository: TaskRepository;
-
-  /**
-   * Get all tasks for a user
-   * Security: Only returns tasks belonging to the authenticated user
-   */
-  async getUserTasks(userId: string): Promise<TaskResponse> {
-    if (!userId) {
-      return { success: false, message: "User ID is required" };
-    }
-
-    const tasks = await this.taskRepository.findByUserId(userId);
-    return {
-      success: true,
-      message: "Tasks retrieved successfully",
-      tasks,
-    };
-  }
-
-  /**
-   * Get a single task by ID
-   * Security: Ensures the task belongs to the authenticated user
-   */
-  async getTaskById(taskId: string, userId: string): Promise<TaskResponse> {
-    if (!taskId || !userId) {
-      return { success: false, message: "Task ID and User ID are required" };
-    }
-
-    const task = await this.taskRepository.findByIdAndUserId(taskId, userId);
-    if (!task) {
-      return {
-        success: false,
-        message: "Task not found or you do not have permission to access it",
-      };
-    }
-
-    return { success: true, message: "Task retrieved successfully", task };
-  }
-
-  /**
-   * Create a new task
-   * Validation:
-   * - Title: required, max 200 characters
-   * - Description: optional, max 1000 characters
-   * - Status: must be "pending", "in-progress", or "completed"
-   */
-  async createTask(
-    userId: string,
-    title: string,
-    description?: string,
-    status?: string,
-  ): Promise<TaskResponse> {
-    // Validate user ID
-    if (!userId) {
-      return { success: false, message: "User ID is required" };
-    }
-
-    // Validate title
-    if (!title || title.trim().length === 0) {
-      return { success: false, message: "Title is required" };
-    }
-    if (title.length > 200) {
-      return {
-        success: false,
-        message: "Title must be less than 200 characters",
-      };
-    }
-
-    // Validate description
-    if (description && description.length > 1000) {
-      return {
-        success: false,
-        message: "Description must be less than 1000 characters",
-      };
-    }
-
-    // Validate status
-    const validStatuses = ["pending", "in-progress", "completed"];
-    if (status && !validStatuses.includes(status)) {
-      return {
-        success: false,
-        message: `Status must be one of: ${validStatuses.join(", ")}`,
-      };
-    }
-
-    // Create task
-    const taskData: CreateTaskDTO = {
-      userId,
-      title: title.trim(),
-      status: status || "pending",
-    };
-    if (description !== undefined) {
-      taskData.description = description.trim();
-    }
-
-    const task = await this.taskRepository.create(taskData);
-    return { success: true, message: "Task created successfully", task };
-  }
-
-  /**
-   * Update an existing task
-   * Security: Ensures the task belongs to the authenticated user
-   * Validation: Same rules as createTask
-   */
-  async updateTask(
-    taskId: string,
-    userId: string,
-    updateData: { title?: string; description?: string; status?: string },
-  ): Promise<TaskResponse> {
-    if (!taskId || !userId) {
-      return { success: false, message: "Task ID and User ID are required" };
-    }
-
-    // Check ownership
-    const existingTask = await this.taskRepository.findByIdAndUserId(
-      taskId,
-      userId,
-    );
-    if (!existingTask) {
-      return {
-        success: false,
-        message: "Task not found or you do not have permission to modify it",
-      };
-    }
-
-    // Validate title if provided
-    if (updateData.title !== undefined) {
-      if (updateData.title.trim().length === 0) {
-        return { success: false, message: "Title cannot be empty" };
-      }
-      if (updateData.title.length > 200) {
-        return {
-          success: false,
-          message: "Title must be less than 200 characters",
-        };
-      }
-      updateData.title = updateData.title.trim();
-    }
-
-    // Validate description if provided
-    if (
-      updateData.description !== undefined &&
-      updateData.description.length > 1000
-    ) {
-      return {
-        success: false,
-        message: "Description must be less than 1000 characters",
-      };
-    }
-
-    // Validate status if provided
-    const validStatuses = ["pending", "in-progress", "completed"];
-    if (updateData.status && !validStatuses.includes(updateData.status)) {
-      return {
-        success: false,
-        message: `Status must be one of: ${validStatuses.join(", ")}`,
-      };
-    }
-
-    // Update task
-    const updatedTask = await this.taskRepository.update(
-      taskId,
-      userId,
-      updateData,
-    );
-    if (!updatedTask) {
-      return { success: false, message: "Failed to update task" };
-    }
-
-    return {
-      success: true,
-      message: "Task updated successfully",
-      task: updatedTask,
-    };
-  }
-
-  /**
-   * Delete a task
-   * Security: Ensures the task belongs to the authenticated user
-   */
-  async deleteTask(taskId: string, userId: string): Promise<TaskResponse> {
-    if (!taskId || !userId) {
-      return { success: false, message: "Task ID and User ID are required" };
-    }
-
-    const deletedTask = await this.taskRepository.delete(taskId, userId);
-    if (!deletedTask) {
-      return {
-        success: false,
-        message: "Task not found or you do not have permission to delete it",
-      };
-    }
-
-    return {
-      success: true,
-      message: "Task deleted successfully",
-      task: deletedTask,
-    };
-  }
-
-  /**
-   * Get tasks by status for a user
-   */
-  async getTasksByStatus(
-    userId: string,
-    status: string,
-  ): Promise<TaskResponse> {
-    if (!userId) {
-      return { success: false, message: "User ID is required" };
-    }
-
-    const validStatuses = ["pending", "in-progress", "completed"];
-    if (!validStatuses.includes(status)) {
-      return {
-        success: false,
-        message: `Status must be one of: ${validStatuses.join(", ")}`,
-      };
-    }
-
-    const tasks = await this.taskRepository.findByUserIdAndStatus(
-      userId,
-      status,
-    );
-    return { success: true, message: "Tasks retrieved successfully", tasks };
-  }
+export interface AuthenticatedRequest extends Request {
+  userId?: string;
 }
+
+export const authMiddleware = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): void => {
+  const token = req.cookies?.token;
+  if (!token) {
+    res.status(401).json({ message: "Unauthorized - No token provided" });
+    return;
+  }
+  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+    userId: string;
+  };
+  req.userId = decoded.userId;
+  next();
+};
 ```
 
-### TaskController (`src/controllers/task.controller.ts`)
+### Validation Middleware (`src/middleware/validate.middleware.ts`)
 
-Handles HTTP requests for task operations:
+Factory function that takes a Joi schema and returns Express middleware:
 
 ```typescript
-/**
- * Get all tasks for the authenticated user
- * GET /api/tasks
- * Response: 200 OK { tasks: ITask[] } | 401 Unauthorized | 500 Error
- */
-export const getTasks = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  const userId = req.userId;
-  if (!userId) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  const result = await taskService.getUserTasks(userId);
-  if (!result.success) {
-    res.status(400).json({ message: result.message });
-    return;
-  }
-
-  res.status(200).json({
-    message: result.message,
-    tasks: result.tasks,
-  });
-};
-
-/**
- * Get a single task by ID
- * GET /api/tasks/:id
- * Response: 200 OK { task: ITask } | 404 Not Found | 401 Unauthorized
- */
-export const getTaskById = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  const userId = req.userId;
-  const taskId = req.params.id;
-
-  if (!userId) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  if (!taskId || Array.isArray(taskId)) {
-    res.status(400).json({ message: "Invalid Task ID" });
-    return;
-  }
-
-  const result = await taskService.getTaskById(taskId, userId);
-  if (!result.success) {
-    const statusCode = result.message.includes("not found") ? 404 : 400;
-    res.status(statusCode).json({ message: result.message });
-    return;
-  }
-
-  res.status(200).json({
-    message: result.message,
-    task: result.task,
-  });
-};
-
-/**
- * Create a new task
- * POST /api/tasks
- * Body: { title: string, description?: string, status?: string }
- * Response: 201 Created { task: ITask } | 400 Bad Request | 401 Unauthorized
- */
-export const createTask = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  const userId = req.userId;
-  const { title, description, status } = req.body;
-
-  if (!userId) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  const result = await taskService.createTask(
-    userId,
-    title,
-    description,
-    status,
-  );
-  if (!result.success) {
-    res.status(400).json({ message: result.message });
-    return;
-  }
-
-  res.status(201).json({
-    message: result.message,
-    task: result.task,
-  });
-};
-
-/**
- * Update an existing task
- * PUT /api/tasks/:id
- * Body: { title?: string, description?: string, status?: string }
- * Response: 200 OK { task: ITask } | 404 Not Found | 400 Bad Request
- */
-export const updateTask = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  const userId = req.userId;
-  const taskId = req.params.id;
-  const { title, description, status } = req.body;
-
-  if (!userId) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  if (!taskId || Array.isArray(taskId)) {
-    res.status(400).json({ message: "Invalid Task ID" });
-    return;
-  }
-
-  const result = await taskService.updateTask(taskId, userId, {
-    title,
-    description,
-    status,
-  });
-
-  if (!result.success) {
-    const statusCode =
-      result.message.includes("not found") ||
-      result.message.includes("permission")
-        ? 404
-        : 400;
-    res.status(statusCode).json({ message: result.message });
-    return;
-  }
-
-  res.status(200).json({
-    message: result.message,
-    task: result.task,
-  });
-};
-
-/**
- * Delete a task
- * DELETE /api/tasks/:id
- * Response: 200 OK | 404 Not Found | 401 Unauthorized
- */
-export const deleteTask = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  const userId = req.userId;
-  const taskId = req.params.id;
-
-  if (!userId) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  if (!taskId || Array.isArray(taskId)) {
-    res.status(400).json({ message: "Invalid Task ID" });
-    return;
-  }
-
-  const result = await taskService.deleteTask(taskId, userId);
-  if (!result.success) {
-    const statusCode =
-      result.message.includes("not found") ||
-      result.message.includes("permission")
-        ? 404
-        : 400;
-    res.status(statusCode).json({ message: result.message });
-    return;
-  }
-
-  res.status(200).json({ message: result.message });
-};
-
-/**
- * Get tasks by status for the authenticated user
- * GET /api/tasks/status/:status
- * Response: 200 OK { tasks: ITask[] } | 400 Bad Request | 401 Unauthorized
- */
-export const getTasksByStatus = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  const userId = req.userId;
-  const status = req.params.status;
-
-  if (!userId) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  if (!status || Array.isArray(status)) {
-    res.status(400).json({ message: "Invalid status" });
-    return;
-  }
-
-  const result = await taskService.getTasksByStatus(userId, status);
-  if (!result.success) {
-    res.status(400).json({ message: result.message });
-    return;
-  }
-
-  res.status(200).json({
-    message: result.message,
-    tasks: result.tasks,
-  });
+export const validate = (schema: ObjectSchema) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const { error } = schema.validate(req.body, {
+      abortEarly: false, // Return ALL errors, not just the first
+      stripUnknown: true, // Remove fields not in the schema
+    });
+    if (error) {
+      const errorMessages = error.details.map((detail) => detail.message);
+      res
+        .status(400)
+        .json({ message: "Validation failed", errors: errorMessages });
+      return;
+    }
+    next();
+  };
 };
 ```
+
+### Rate Limiter Middleware (`src/middleware/rateLimiter.middleware.ts`)
+
+| Limiter         | Scope            | Limit        | Window     | Applied To                                       |
+| --------------- | ---------------- | ------------ | ---------- | ------------------------------------------------ |
+| `globalLimiter` | All routes       | 100 requests | 15 minutes | `server.ts` (globally)                           |
+| `authLimiter`   | Auth routes only | 10 requests  | 15 minutes | `/auth/register`, `/auth/login`, `/auth/refresh` |
+
+---
+
+## Input Validation
+
+### Auth Validation Schemas (`src/validators/auth.validator.ts`)
+
+**Register Schema:**
+
+| Field      | Rules                                                                               |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `email`    | Valid email format, required                                                        |
+| `password` | Min 8 chars, max 128 chars, at least 1 uppercase + 1 lowercase + 1 number, required |
+
+**Login Schema:**
+
+| Field      | Rules                        |
+| ---------- | ---------------------------- |
+| `email`    | Valid email format, required |
+| `password` | Required                     |
+
+### Task Validation Schemas (`src/validators/task.validator.ts`)
+
+**Create Task Schema:**
+
+| Field         | Rules                                                   |
+| ------------- | ------------------------------------------------------- |
+| `title`       | 1-200 characters, trimmed, required                     |
+| `description` | Max 1000 characters, trimmed, optional                  |
+| `status`      | One of: `pending`, `in-progress`, `completed`, optional |
+
+**Update Task Schema:**
+
+Same rules as create, but all fields are optional. At least one field must be provided.
 
 ---
 
@@ -1360,11 +543,14 @@ export const getTasksByStatus = async (
 
 ### Authentication Endpoints
 
-| Method | Endpoint         | Auth Required | Description                 |
-| ------ | ---------------- | ------------- | --------------------------- |
-| POST   | `/auth/register` | No            | Register a new user         |
-| POST   | `/auth/login`    | No            | Login and receive JWT token |
-| POST   | `/auth/logout`   | No            | Logout and clear JWT cookie |
+| Method | Endpoint         | Auth | Rate Limited | Joi Validated | Description                  |
+| ------ | ---------------- | ---- | ------------ | ------------- | ---------------------------- |
+| POST   | `/auth/register` | No   | ✅ 10/15min  | ✅            | Register a new user          |
+| POST   | `/auth/login`    | No   | ✅ 10/15min  | ✅            | Login and receive tokens     |
+| POST   | `/auth/refresh`  | No   | ✅ 10/15min  | —             | Refresh access token         |
+| POST   | `/auth/logout`   | ✅   | —            | —             | Logout and invalidate tokens |
+
+---
 
 #### POST /auth/register
 
@@ -1373,7 +559,7 @@ export const getTasksByStatus = async (
 ```json
 {
   "email": "user@example.com",
-  "password": "securePassword123"
+  "password": "SecurePassword123"
 }
 ```
 
@@ -1388,9 +574,9 @@ export const getTasksByStatus = async (
 
 **Error Responses:**
 
-- `400 Bad Request`: Missing email or password
+- `400 Bad Request`: Validation failed (missing email, weak password, invalid email format)
 - `409 Conflict`: User already exists
-- `500 Internal Server Error`: Server error
+- `429 Too Many Requests`: Rate limit exceeded (10 attempts per 15 min)
 
 ---
 
@@ -1401,7 +587,7 @@ export const getTasksByStatus = async (
 ```json
 {
   "email": "user@example.com",
-  "password": "securePassword123"
+  "password": "SecurePassword123"
 }
 ```
 
@@ -1414,17 +600,41 @@ export const getTasksByStatus = async (
 }
 ```
 
-_Also sets HttpOnly cookie: `token=jwt...`_
+_Sets two HttpOnly cookies: `token` (15 min) and `refreshToken` (7 days)_
 
 **Error Responses:**
 
-- `400 Bad Request`: Missing email or password
+- `400 Bad Request`: Validation failed
 - `401 Unauthorized`: Invalid credentials
-- `500 Internal Server Error`: Server error
+- `429 Too Many Requests`: Rate limit exceeded
+
+---
+
+#### POST /auth/refresh
+
+**No request body** — reads refresh token from HttpOnly cookie automatically.
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Token refreshed successfully",
+  "userId": "507f1f77bcf86cd799439011"
+}
+```
+
+_Rotates both cookies: new access token + new refresh token_
+
+**Error Responses:**
+
+- `401 Unauthorized`: Missing or invalid refresh token
+- `429 Too Many Requests`: Rate limit exceeded
 
 ---
 
 #### POST /auth/logout
+
+**No request body.** Requires authentication (access token cookie).
 
 **Response (200 OK):**
 
@@ -1434,22 +644,22 @@ _Also sets HttpOnly cookie: `token=jwt...`_
 }
 ```
 
-_Clears the HttpOnly cookie_
+_Clears both cookies and invalidates refresh token in database._
 
 ---
 
 ### Task Endpoints
 
-All task endpoints require authentication (JWT token in cookie).
+All task endpoints require authentication (JWT access token in cookie).
 
-| Method | Endpoint                    | Description                                         |
-| ------ | --------------------------- | --------------------------------------------------- |
-| GET    | `/api/tasks`                | Get all tasks for authenticated user                |
-| GET    | `/api/tasks/:id`            | Get a specific task by ID                           |
-| GET    | `/api/tasks/status/:status` | Get tasks by status (pending/in-progress/completed) |
-| POST   | `/api/tasks`                | Create a new task                                   |
-| PUT    | `/api/tasks/:id`            | Update an existing task                             |
-| DELETE | `/api/tasks/:id`            | Delete a task                                       |
+| Method | Endpoint                    | Joi Validated | Description                          |
+| ------ | --------------------------- | ------------- | ------------------------------------ |
+| GET    | `/api/tasks`                | —             | Get all tasks for authenticated user |
+| GET    | `/api/tasks/:id`            | —             | Get a specific task by ID            |
+| GET    | `/api/tasks/status/:status` | —             | Filter tasks by status               |
+| POST   | `/api/tasks`                | ✅            | Create a new task                    |
+| PUT    | `/api/tasks/:id`            | ✅            | Update an existing task              |
+| DELETE | `/api/tasks/:id`            | —             | Delete a task                        |
 
 ---
 
@@ -1476,56 +686,6 @@ All task endpoints require authentication (JWT token in cookie).
 
 ---
 
-#### GET /api/tasks/:id
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Task retrieved successfully",
-  "task": {
-    "_id": "507f1f77bcf86cd799439011",
-    "userId": "507f191e810c19729de860ea",
-    "title": "Complete project documentation",
-    "description": "Write comprehensive docs for backend",
-    "status": "in-progress",
-    "createdAt": "2026-02-16T10:00:00.000Z",
-    "updatedAt": "2026-02-16T11:30:00.000Z"
-  }
-}
-```
-
-**Error Responses:**
-
-- `404 Not Found`: Task doesn't exist or doesn't belong to user
-- `401 Unauthorized`: Not authenticated
-
----
-
-#### GET /api/tasks/status/:status
-
-**Valid Status Values:** `pending`, `in-progress`, `completed`
-
-**Example:** `GET /api/tasks/status/completed`
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Tasks retrieved successfully",
-  "tasks": [
-    {
-      "_id": "507f1f77bcf86cd799439012",
-      "title": "Setup database",
-      "status": "completed",
-      "createdAt": "2026-02-15T09:00:00.000Z"
-    }
-  ]
-}
-```
-
----
-
 #### POST /api/tasks
 
 **Request Body:**
@@ -1538,46 +698,26 @@ All task endpoints require authentication (JWT token in cookie).
 }
 ```
 
-_Only `title` is required. `description` and `status` are optional._
+Only `title` is required. `description` and `status` are optional.
 
 **Response (201 Created):**
 
 ```json
 {
   "message": "Task created successfully",
-  "task": {
-    "_id": "507f1f77bcf86cd799439011",
-    "userId": "507f191e810c19729de860ea",
-    "title": "Complete project documentation",
-    "description": "Write comprehensive docs for backend",
-    "status": "pending",
-    "createdAt": "2026-02-16T10:00:00.000Z",
-    "updatedAt": "2026-02-16T10:00:00.000Z"
-  }
+  "task": { ... }
 }
 ```
-
-**Validation Rules:**
-
-- `title`: Required, max 200 characters
-- `description`: Optional, max 1000 characters
-- `status`: Optional, must be "pending", "in-progress", or "completed"
-
-**Error Responses:**
-
-- `400 Bad Request`: Validation failed
-- `401 Unauthorized`: Not authenticated
 
 ---
 
 #### PUT /api/tasks/:id
 
-**Request Body (all fields optional):**
+**Request Body (all fields optional, at least one required):**
 
 ```json
 {
   "title": "Updated title",
-  "description": "Updated description",
   "status": "completed"
 }
 ```
@@ -1587,21 +727,9 @@ _Only `title` is required. `description` and `status` are optional._
 ```json
 {
   "message": "Task updated successfully",
-  "task": {
-    "_id": "507f1f77bcf86cd799439011",
-    "title": "Updated title",
-    "description": "Updated description",
-    "status": "completed",
-    "updatedAt": "2026-02-16T12:00:00.000Z"
-  }
+  "task": { ... }
 }
 ```
-
-**Error Responses:**
-
-- `404 Not Found`: Task doesn't exist or doesn't belong to user
-- `400 Bad Request`: Validation failed
-- `401 Unauthorized`: Not authenticated
 
 ---
 
@@ -1615,97 +743,83 @@ _Only `title` is required. `description` and `status` are optional._
 }
 ```
 
-**Error Responses:**
-
-- `404 Not Found`: Task doesn't exist or doesn't belong to user
-- `401 Unauthorized`: Not authenticated
-
 ---
 
 ## Security Features
 
 ### 1. Password Security
 
-- **Hashing**: Passwords hashed with bcryptjs using 10 salt rounds
-- **No Storage**: Plaintext passwords never stored in database
-- **Timing Attack Protection**: bcrypt compare function is timing-safe
+- **bcryptjs** hashing with **10 salt rounds** (2¹⁰ = 1,024 iterations)
+- Plaintext passwords never stored
+- **Timing-safe** comparison via `bcrypt.compare()`
+
+### 2. JWT & Refresh Token Security
+
+- **Access token**: Short-lived (15 min), stored in HttpOnly cookie
+- **Refresh token**: Long-lived (7 days), cryptographically random, SHA-256 hashed in DB
+- **Token rotation**: New refresh token on every use, old one invalidated
+- **Cookie flags**: `httpOnly`, `secure` (production), `sameSite: "strict"`
+
+### 3. Rate Limiting (express-rate-limit)
+
+- **Global**: 100 requests per 15 minutes per IP
+- **Auth endpoints**: 10 requests per 15 minutes per IP (prevents brute-force)
+- Returns `429 Too Many Requests` with human-readable message
+
+### 4. Input Validation (Joi)
+
+- **Register**: Email format validation, password strength (8+ chars, uppercase, lowercase, number)
+- **Task create/update**: Title length (1-200), description length (max 1000), status enum
+- **stripUnknown**: Removes unexpected fields from request body
+- **abortEarly: false**: Returns all validation errors at once
+
+### 5. NoSQL Injection Prevention (Custom Sanitize Middleware)
+
+A custom Express 5-compatible middleware (`src/middleware/sanitize.middleware.ts`) that recursively strips keys starting with `$` or containing `.` from `req.body`, `req.params`, and `req.query` to prevent operators like `{"$gt": ""}` from being injected into MongoDB queries. Unlike `express-mongo-sanitize`, it mutates objects in-place instead of reassigning `req.query` (which is read-only in Express 5).
+
+### 6. HTTP Security Headers (Helmet)
+
+Automatically sets 15+ headers including:
+
+- `Content-Security-Policy` — Prevents XSS and data injection
+- `X-Frame-Options` — Prevents clickjacking
+- `X-Content-Type-Options` — Prevents MIME sniffing
+- `Strict-Transport-Security` — Forces HTTPS
+- `X-Permitted-Cross-Domain-Policies` — Restricts Adobe cross-domain policies
+
+### 7. CORS Configuration
 
 ```typescript
-// 10 salt rounds = 2^10 = 1024 iterations
-const salt = await bcrypt.genSalt(10);
-const hashedPassword = await bcrypt.hash(password, salt);
-```
-
-### 2. JWT Token Security
-
-- **HttpOnly Cookies**: Tokens stored in HttpOnly cookies (inaccessible to JavaScript)
-- **Secure Flag**: HTTPS-only in production
-- **SameSite**: CSRF protection with `sameSite: "strict"`
-- **Expiration**: Tokens expire after 1 hour
-- **Secret Key**: Stored in environment variables
-
-```typescript
-res.cookie("token", jwtToken, {
-  httpOnly: true, // XSS protection
-  secure: NODE_ENV === "production", // HTTPS only
-  sameSite: "strict", // CSRF protection
-  maxAge: 3600000, // 1 hour
+cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 });
 ```
 
-### 3. Authorization
+- Restricts API access to the configured frontend origin
+- `credentials: true` allows cookies to be sent cross-origin
 
-- **Ownership Verification**: Users can only access/modify their own data
-- **Database-Level Filtering**: All queries filter by `userId`
-- **Middleware Protection**: All task routes protected by auth middleware
+### 8. Authorization
 
-```typescript
-// Repository ensures ownership
-async findByIdAndUserId(taskId: string, userId: string): Promise<ITask | null> {
-  return await Task.findOne({ _id: taskId, userId });
-}
-```
+- Every task query filters by **both `taskId` AND `userId`** at the database level
+- Users can never access, modify, or delete another user's tasks
+- Auth middleware on all `/api/*` routes
 
-### 4. Input Validation
+### 9. Error Handling
 
-- **Required Fields**: Email, password, task title
-- **Length Limits**:
-  - Title: max 200 characters
-  - Description: max 1000 characters
-- **Status Validation**: Only allowed values accepted
-- **Trimming**: Whitespace removed from inputs
+- Stack traces are **never** sent to clients
+- Errors logged server-side with `console.error()`
+- Generic messages returned to clients
 
-### 5. Error Handling
-
-- **No Stack Traces**: Stack traces never sent to client
-- **Generic Messages**: Error details logged server-side only
-- **Consistent Responses**: Uniform error response format
+### 10. Request Body Size Limit
 
 ```typescript
-catch (error) {
-  console.error("Error details:", error);  // Server-side only
-  res.status(500).json({
-    message: "An error occurred"
-  });  // Generic client message
-}
+app.use(express.json({ limit: "10kb" }));
 ```
 
-### 6. Database Security
-
-- **Indexed Fields**: Fast queries prevent timing attacks
-- **Mongoose Validation**: Schema-level validation
-- **ObjectId Verification**: Prevents injection attacks
-
-### 7. HTTP Security Headers (with Helmet)
-
-`helmet` is included as a dependency and available for use. It can be enabled by adding it to the server middleware:
-
-```typescript
-import helmet from "helmet";
-app.use(helmet()); // Sets various security headers
-```
-
-> **Note:** Helmet is currently installed but not enabled in the server entry point. Add the above lines to `server.ts` to activate security headers.
+Limits request body to 10kb to prevent large payload attacks.
 
 ---
 
@@ -1713,7 +827,7 @@ app.use(helmet()); // Sets various security headers
 
 ### Error Response Format
 
-All errors return consistent JSON format:
+All errors return consistent JSON:
 
 ```json
 {
@@ -1721,55 +835,30 @@ All errors return consistent JSON format:
 }
 ```
 
+Validation errors include an additional `errors` array:
+
+```json
+{
+  "message": "Validation failed",
+  "errors": [
+    "Password must be at least 8 characters long",
+    "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+  ]
+}
+```
+
 ### HTTP Status Codes
 
-| Status Code | Meaning               | Example                            |
-| ----------- | --------------------- | ---------------------------------- |
-| 200         | OK                    | Successful GET, PUT, DELETE        |
-| 201         | Created               | Successful POST (resource created) |
-| 400         | Bad Request           | Invalid input, validation failed   |
-| 401         | Unauthorized          | Missing/invalid JWT token          |
-| 404         | Not Found             | Resource doesn't exist             |
-| 409         | Conflict              | User already exists                |
-| 500         | Internal Server Error | Unexpected server error            |
-
-### Error Handling Strategy
-
-1. **Controller Level**: Catch exceptions and return appropriate HTTP status
-2. **Service Level**: Return structured response objects with success/failure
-3. **Repository Level**: Let exceptions bubble up (database errors)
-
-```typescript
-// Service returns structured response
-async createTask(): Promise<TaskResponse> {
-  try {
-    // ... logic
-    return {
-      success: true,
-      message: "Task created successfully",
-      task
-    };
-  } catch (error) {
-    console.error("Error:", error);  // Log internally
-    return {
-      success: false,
-      message: "An error occurred"   // Generic client message
-    };
-  }
-}
-
-// Controller converts to HTTP response
-export const createTask = async (req, res) => {
-  const result = await taskService.createTask(...);
-
-  if (!result.success) {
-    res.status(400).json({ message: result.message });
-    return;
-  }
-
-  res.status(201).json({ task: result.task });
-};
-```
+| Code | Meaning               | Example                            |
+| ---- | --------------------- | ---------------------------------- |
+| 200  | OK                    | Successful GET, PUT, DELETE        |
+| 201  | Created               | Successful POST (resource created) |
+| 400  | Bad Request           | Validation failed, invalid input   |
+| 401  | Unauthorized          | Missing/invalid JWT token          |
+| 404  | Not Found             | Resource doesn't exist             |
+| 409  | Conflict              | User already exists                |
+| 429  | Too Many Requests     | Rate limit exceeded                |
+| 500  | Internal Server Error | Unexpected server error            |
 
 ---
 
@@ -1785,13 +874,10 @@ npm install
 ```
 
 2. **Configure Environment**
-   Create `.env` file:
 
-```env
-PORT=5000
-NODE_ENV=development
-MONGO_URI=mongodb://localhost:27017/task-manager
-JWT_SECRET=your-super-secret-key
+```bash
+cp .env.example .env
+# Edit .env with your values (MONGO_URI, JWT_SECRET, etc.)
 ```
 
 3. **Start MongoDB**
@@ -1809,52 +895,42 @@ mongod
 npm start
 ```
 
-This uses `nodemon` with `tsx` to watch for file changes and auto-restart the server.
+Uses `nodemon` with `tsx` to watch for file changes and auto-restart.
 
 ### TypeScript Compilation
 
 ```bash
+# Type-check without emitting
+npx tsc --noEmit
+
 # Compile TypeScript
 npm run build
-
-# Or directly
-npx tsc --build
 ```
-
-### Package.json Scripts
-
-Scripts in `package.json`:
-
-```json
-{
-  "scripts": {
-    "start": "nodemon -- src/server.ts",
-    "build": "tsc --build",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  }
-}
-```
-
-- **`npm start`**: Runs the server with `nodemon` + `tsx` for auto-reloading during development
-- **`npm run build`**: Compiles TypeScript using `tsc --build`
 
 ### Testing with cURL
 
-**Register a user:**
+**Register:**
 
 ```bash
 curl -X POST http://localhost:5000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+  -d '{"email":"test@example.com","password":"SecurePass123"}'
 ```
 
-**Login:**
+**Login (save cookies):**
 
 ```bash
 curl -X POST http://localhost:5000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}' \
+  -d '{"email":"test@example.com","password":"SecurePass123"}' \
   -c cookies.txt
+```
+
+**Refresh token:**
+
+```bash
+curl -X POST http://localhost:5000/auth/refresh \
+  -b cookies.txt -c cookies.txt
 ```
 
 **Create a task:**
@@ -1869,53 +945,16 @@ curl -X POST http://localhost:5000/api/tasks \
 **Get all tasks:**
 
 ```bash
-curl -X GET http://localhost:5000/api/tasks \
-  -b cookies.txt
+curl -X GET http://localhost:5000/api/tasks -b cookies.txt
 ```
 
-### Database Inspection
+### Testing with Postman
 
-```bash
-# Connect to MongoDB shell
-mongosh
+Import `Task_Manager_API.postman_collection.json` into Postman. The collection includes:
 
-# Use the database
-use task-manager
-
-# View users
-db.users.find()
-
-# View tasks
-db.tasks.find()
-
-# Count documents
-db.tasks.countDocuments()
-```
-
-### Production Deployment Considerations
-
-1. **Environment Variables**
-   - Set `NODE_ENV=production`
-   - Use strong `JWT_SECRET`
-   - Use MongoDB Atlas or managed database
-
-2. **Security**
-   - Enable HTTPS (secure cookies)
-   - Set up rate limiting
-   - Configure CORS properly
-   - Use environment-specific values
-
-3. **Performance**
-   - Enable database indexing
-   - Use connection pooling
-   - Implement caching if needed
-   - Set up logging and monitoring
-
-4. **Scaling**
-   - Use load balancer
-   - Horizontal scaling with multiple instances
-   - Session management (if needed)
-   - Database replication
+- All auth endpoints (register, login, refresh, logout)
+- All task endpoints (CRUD + filter by status)
+- Error test cases (validation, auth, rate limiting)
 
 ---
 
@@ -1923,19 +962,20 @@ db.tasks.countDocuments()
 
 This backend implements a production-ready Task Manager API with:
 
-✅ **Clean Architecture**: Service Repository Pattern for maintainability  
-✅ **Type Safety**: Full TypeScript implementation with strict mode  
-✅ **Security**: JWT authentication, password hashing, HttpOnly cookies  
+✅ **Clean Architecture**: Service Repository Pattern  
+✅ **Type Safety**: Full TypeScript with strict mode  
+✅ **Authentication**: JWT access tokens (15 min) + refresh tokens (7 days) with rotation  
 ✅ **Authorization**: User-specific data access with ownership verification  
-✅ **Validation**: Comprehensive input validation at all layers  
-✅ **Error Handling**: Secure error responses without stack trace leakage  
-✅ **Modern Stack**: ES Modules, Express 5, Mongoose 9, TypeScript 5  
-✅ **Best Practices**: RESTful API design, proper HTTP status codes
-
-The implementation is ready for production use with minor configuration adjustments for specific deployment environments.
+✅ **Input Validation**: Joi schemas with structured error responses  
+✅ **Rate Limiting**: Global + auth-specific via express-rate-limit  
+✅ **NoSQL Injection Prevention**: Custom sanitize middleware (Express 5 compatible)  
+✅ **Security Headers**: Helmet (CSP, X-Frame-Options, etc.)  
+✅ **CORS**: Configured with restricted origins  
+✅ **Error Handling**: Secure responses without stack trace leakage  
+✅ **Modern Stack**: ES Modules, Express 5, Mongoose 9, TypeScript 5
 
 ---
 
-**Documentation Version**: 1.1  
+**Documentation Version**: 2.0  
 **Last Updated**: February 17, 2026  
 **Backend Version**: 1.0.0

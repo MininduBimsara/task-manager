@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Task Manager API",
-    "description": "Complete API collection for testing the Task Manager backend",
+    "description": "Complete API collection for testing the Task Manager backend.\n\nSetup:\n1. Set base_url variable (default: http://localhost:5000)\n2. Run 'Register User' first, then 'Login User'\n3. Cookies are auto-managed (HttpOnly JWT + refresh token)\n\nAuth Flow: Register → Login → Use Tasks → Refresh Token → Logout",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -43,7 +43,8 @@
               "raw": "{{base_url}}/auth/register",
               "host": ["{{base_url}}"],
               "path": ["auth", "register"]
-            }
+            },
+            "description": "Register a new user.\n\nValidation (Joi):\n- email: valid email format, required\n- password: min 8 chars, at least 1 uppercase, 1 lowercase, 1 number\n\nRate limited: 10 requests per 15 minutes per IP."
           }
         },
         {
@@ -81,11 +82,60 @@
               "raw": "{{base_url}}/auth/login",
               "host": ["{{base_url}}"],
               "path": ["auth", "login"]
+            },
+            "description": "Login and receive JWT access token (15min) + refresh token (7 days) as HttpOnly cookies.\n\nRate limited: 10 requests per 15 minutes per IP."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test('Token refreshed successfully', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.include('refreshed');",
+                  "  pm.expect(jsonData).to.have.property('userId');",
+                  "});"
+                ]
+              }
             }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "Refresh the access token using the refresh token cookie.\n\nThe refresh token is automatically sent via the HttpOnly cookie (set during login).\nOn success, both the access token and refresh token are rotated (new cookies are set).\n\nRate limited: 10 requests per 15 minutes per IP."
           }
         },
         {
           "name": "Logout User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test('Logout successful', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.include('Logout');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
@@ -93,7 +143,8 @@
               "raw": "{{base_url}}/auth/logout",
               "host": ["{{base_url}}"],
               "path": ["auth", "logout"]
-            }
+            },
+            "description": "Logout the user.\n\nClears both the access token and refresh token cookies.\nInvalidates the refresh token in the database.\nRequires authentication (access token cookie)."
           }
         }
       ]
@@ -132,7 +183,8 @@
               "raw": "{{base_url}}/api/tasks",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks"]
-            }
+            },
+            "description": "Get all tasks for the authenticated user.\nTasks are sorted by creation date (newest first).\nRequires authentication (access token cookie)."
           }
         },
         {
@@ -163,7 +215,8 @@
               "raw": "{{base_url}}/api/tasks/{{taskId}}",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks", "{{taskId}}"]
-            }
+            },
+            "description": "Get a single task by its ID.\nReturns 404 if the task doesn't exist or doesn't belong to the user.\nRequires authentication (access token cookie)."
           }
         },
         {
@@ -194,7 +247,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "tasks", "status", "pending"]
             },
-            "description": "Get tasks by status. Valid statuses: pending, in-progress, completed"
+            "description": "Get tasks by status. Valid statuses: pending, in-progress, completed.\nRequires authentication (access token cookie)."
           }
         },
         {
@@ -234,7 +287,8 @@
               "raw": "{{base_url}}/api/tasks",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks"]
-            }
+            },
+            "description": "Create a new task for the authenticated user.\n\nValidation (Joi):\n- title: required, 1-200 characters\n- description: optional, max 1000 characters\n- status: optional, one of: pending, in-progress, completed (defaults to pending)\n\nRequires authentication (access token cookie)."
           }
         },
         {
@@ -273,7 +327,8 @@
               "raw": "{{base_url}}/api/tasks/{{taskId}}",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks", "{{taskId}}"]
-            }
+            },
+            "description": "Update an existing task. Only the task owner can update it.\n\nValidation (Joi):\n- title: optional, 1-200 characters\n- description: optional, max 1000 characters\n- status: optional, one of: pending, in-progress, completed\n- At least one field must be provided\n\nRequires authentication (access token cookie)."
           }
         },
         {
@@ -302,7 +357,8 @@
               "raw": "{{base_url}}/api/tasks/{{taskId}}",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks", "{{taskId}}"]
-            }
+            },
+            "description": "Delete a task. Only the task owner can delete it.\nRequires authentication (access token cookie)."
           }
         }
       ]
@@ -311,7 +367,7 @@
       "name": "Error Test Cases",
       "item": [
         {
-          "name": "Register with missing email",
+          "name": "Register - Missing email",
           "event": [
             {
               "listen": "test",
@@ -319,6 +375,12 @@
                 "exec": [
                   "pm.test('Returns 400 Bad Request', function() {",
                   "  pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Returns validation error', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.equal('Validation failed');",
+                  "  pm.expect(jsonData.errors).to.be.an('array');",
                   "});"
                 ]
               }
@@ -340,11 +402,90 @@
               "raw": "{{base_url}}/auth/register",
               "host": ["{{base_url}}"],
               "path": ["auth", "register"]
-            }
+            },
+            "description": "Tests Joi validation: missing required email field."
           }
         },
         {
-          "name": "Login with invalid credentials",
+          "name": "Register - Weak password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 Bad Request', function() {",
+                  "  pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Returns password validation error', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.equal('Validation failed');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"weak\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Tests Joi validation: password too short and missing uppercase/number."
+          }
+        },
+        {
+          "name": "Register - Invalid email format",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 Bad Request', function() {",
+                  "  pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Returns email validation error', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.equal('Validation failed');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"SecurePassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Tests Joi validation: invalid email format."
+          }
+        },
+        {
+          "name": "Login - Invalid credentials",
           "event": [
             {
               "listen": "test",
@@ -367,17 +508,48 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"invalid@example.com\",\n  \"password\": \"wrongpassword\"\n}"
+              "raw": "{\n  \"email\": \"invalid@example.com\",\n  \"password\": \"WrongPassword123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
               "host": ["{{base_url}}"],
               "path": ["auth", "login"]
-            }
+            },
+            "description": "Tests login with wrong credentials."
           }
         },
         {
-          "name": "Create task with missing title",
+          "name": "Refresh - Without token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401 Unauthorized', function() {",
+                  "  pm.expect(pm.response.code).to.equal(401);",
+                  "});",
+                  "",
+                  "pm.test('Returns appropriate message', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.include('Refresh token');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "Tests refresh without a valid refresh token cookie."
+          }
+        },
+        {
+          "name": "Create task - Missing title",
           "event": [
             {
               "listen": "test",
@@ -385,6 +557,11 @@
                 "exec": [
                   "pm.test('Returns 400 Bad Request', function() {",
                   "  pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Returns validation error', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.equal('Validation failed');",
                   "});"
                 ]
               }
@@ -406,11 +583,12 @@
               "raw": "{{base_url}}/api/tasks",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks"]
-            }
+            },
+            "description": "Tests Joi validation: missing required title field."
           }
         },
         {
-          "name": "Create task with invalid status",
+          "name": "Create task - Invalid status",
           "event": [
             {
               "listen": "test",
@@ -418,6 +596,11 @@
                 "exec": [
                   "pm.test('Returns 400 Bad Request', function() {",
                   "  pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Returns validation error', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.equal('Validation failed');",
                   "});"
                 ]
               }
@@ -439,11 +622,51 @@
               "raw": "{{base_url}}/api/tasks",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks"]
-            }
+            },
+            "description": "Tests Joi validation: invalid status value."
           }
         },
         {
-          "name": "Access task without authentication",
+          "name": "Update task - Empty body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 Bad Request', function() {",
+                  "  pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Returns validation error', function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.message).to.equal('Validation failed');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{taskId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{taskId}}"]
+            },
+            "description": "Tests Joi validation: update with empty body (at least one field required)."
+          }
+        },
+        {
+          "name": "Access tasks - Without authentication",
           "event": [
             {
               "listen": "test",
@@ -463,7 +686,8 @@
               "raw": "{{base_url}}/api/tasks",
               "host": ["{{base_url}}"],
               "path": ["api", "tasks"]
-            }
+            },
+            "description": "Tests accessing protected route without authentication cookie."
           }
         }
       ]

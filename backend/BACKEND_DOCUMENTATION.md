@@ -130,7 +130,8 @@ backend/
 │   ├── middleware/
 │   │   ├── auth.middleware.ts          # JWT authentication middleware
 │   │   ├── validate.middleware.ts      # Joi validation middleware
-│   │   └── rateLimiter.middleware.ts   # Rate limiting middleware
+│   │   ├── rateLimiter.middleware.ts   # Rate limiting middleware
+│   │   └── sanitize.middleware.ts     # NoSQL injection prevention (Express 5 compatible)
 │   │
 │   ├── validators/
 │   │   ├── auth.validator.ts           # Joi schemas for auth endpoints
@@ -465,11 +466,19 @@ export const authMiddleware = (
     res.status(401).json({ message: "Unauthorized - No token provided" });
     return;
   }
-  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-    userId: string;
-  };
-  req.userId = decoded.userId;
-  next();
+  try {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error("JWT_SECRET is not defined in environment variables");
+      res.status(500).json({ message: "Internal server error" });
+      return;
+    }
+    const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    res.status(401).json({ message: "Unauthorized - Invalid token" });
+  }
 };
 ```
 

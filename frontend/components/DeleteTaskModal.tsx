@@ -54,6 +54,7 @@ const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="modal-body"
         style={{
           position: "relative",
           width: "100%",

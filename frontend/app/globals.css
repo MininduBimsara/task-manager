@@ -24,3 +24,88 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Mobile Responsive Styles ── */
+
+/* Dashboard content container */
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding: 20px 12px !important;
+  }
+
+  .dashboard-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .dashboard-controls {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .dashboard-search {
+    flex: 1 1 100% !important;
+  }
+
+  .dashboard-search input {
+    width: 100% !important;
+  }
+
+  .dashboard-btn-new,
+  .dashboard-btn-logout {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+
+  /* Create task form grid -> single col on mobile */
+  .create-task-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hide the table header on mobile */
+  .task-table-header {
+    display: none !important;
+  }
+
+  /* Convert table rows to stacked cards */
+  .task-table-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    padding: 16px !important;
+  }
+
+  /* Show data labels on mobile */
+  .task-cell-label {
+    display: inline-block !important;
+  }
+
+  /* Make actions row full-width on mobile */
+  .task-actions {
+    justify-content: flex-start !important;
+    padding-top: 6px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+  }
+
+  /* Modal tweaks */
+  .modal-body {
+    margin: 0 8px !important;
+    padding: 24px 16px !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 16px 8px !important;
+  }
+
+  .dashboard-header h1 {
+    font-size: 1.5rem !important;
+  }
+
+  .dashboard-btn-new,
+  .dashboard-btn-logout {
+    flex: 1 1 100% !important;
+  }
+}

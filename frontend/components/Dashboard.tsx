@@ -198,6 +198,7 @@ const Dashboard: React.FC = () => {
 
       {/* Content */}
       <div
+        className="dashboard-content"
         style={{
           position: "relative",
           zIndex: 10,
@@ -208,6 +209,7 @@ const Dashboard: React.FC = () => {
       >
         {/* Header */}
         <div
+          className="dashboard-header"
           style={{
             display: "flex",
             alignItems: "center",
@@ -248,9 +250,12 @@ const Dashboard: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            className="dashboard-controls"
+            style={{ display: "flex", alignItems: "center", gap: "12px" }}
+          >
             {/* Search */}
-            <div style={{ position: "relative" }}>
+            <div className="dashboard-search" style={{ position: "relative" }}>
               <svg
                 style={{
                   position: "absolute",
@@ -298,7 +303,9 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* New Task Button */}
+            {/* eslint-disable-next-line -- className for responsive CSS */}
             <button
+              className="dashboard-btn-new"
               onClick={() => setShowCreate(!showCreate)}
               style={{
                 padding: "9px 18px",
@@ -341,6 +348,7 @@ const Dashboard: React.FC = () => {
 
             {/* Logout Button */}
             <button
+              className="dashboard-btn-logout"
               onClick={async () => {
                 await dispatch(logoutUser());
                 await persistor.purge();
@@ -416,6 +424,7 @@ const Dashboard: React.FC = () => {
             </p>
             <form onSubmit={handleCreateTask}>
               <div
+                className="create-task-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
@@ -589,6 +598,7 @@ const Dashboard: React.FC = () => {
 
         {/* Task Table */}
         <div
+          className="task-table-wrapper"
           style={{
             background:
               "linear-gradient(145deg, rgba(30,30,60,0.7), rgba(15,15,35,0.8))",
@@ -599,6 +609,7 @@ const Dashboard: React.FC = () => {
         >
           {/* Table Header */}
           <div
+            className="task-table-header"
             style={{
               display: "grid",
               gridTemplateColumns: "2fr 1fr 1fr 1fr 140px",
@@ -714,6 +725,7 @@ const Dashboard: React.FC = () => {
           {filteredTasks.map((task, index) => (
             <div
               key={task._id}
+              className="task-table-row"
               style={{
                 display: "grid",
                 gridTemplateColumns: "2fr 1fr 1fr 1fr 140px",
@@ -767,10 +779,42 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Status */}
-              <div>{statusBadge(task.status)}</div>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <span
+                  className="task-cell-label"
+                  style={{
+                    display: "none",
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    color: "#64748b",
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  Status:
+                </span>
+                {statusBadge(task.status)}
+              </div>
 
               {/* Created */}
-              <div>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <span
+                  className="task-cell-label"
+                  style={{
+                    display: "none",
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    color: "#64748b",
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  Created:
+                </span>
                 <p
                   style={{
                     color: "#94a3b8",
@@ -786,7 +830,22 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Updated */}
-              <div>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <span
+                  className="task-cell-label"
+                  style={{
+                    display: "none",
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    color: "#64748b",
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  Updated:
+                </span>
                 <p
                   style={{
                     color: "#94a3b8",
@@ -802,7 +861,10 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: "6px" }}>
+              <div
+                className="task-actions"
+                style={{ display: "flex", gap: "6px" }}
+              >
                 {/* View */}
                 <button
                   onClick={() => setViewTask(task)}

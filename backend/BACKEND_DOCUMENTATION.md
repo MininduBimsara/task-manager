@@ -285,7 +285,7 @@ PORT=5000
 NODE_ENV=development
 
 # Database
-MONGO_URI=mongodb://localhost:27017/task-manager
+MONGO_URI=your_mongodb_connection_string_here
 
 # JWT Configuration
 JWT_SECRET=your_jwt_secret_here_change_this
